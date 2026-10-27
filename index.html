@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sleeper Hall of Fame</title>
+<meta name="description" content="A live hall of fame for any Sleeper fantasy football league: titles, records, trades, drafts and awards.">
+<meta name="theme-color" content="#0C171A">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%230C171A'/%3E%3Cpath d='M12 5v14M5.9 8.5l12.2 7M5.9 15.5l12.2-7' stroke='%23E8B04B' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#all" id="brand">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9"/></svg>
+      Sleeper Hall of Fame
+    </a>
+    <span class="meta" id="meta"></span>
+  </div>
+</header>
+<div class="wrap"><nav class="leagues" id="leagues" aria-label="League"></nav><nav class="tabs" id="tabs" aria-label="Seasons"></nav></div>
+<main id="app"><div class="wrap status" id="status">Loading…</div></main>
+<footer><div class="wrap"><span>Live from Sleeper · refreshes on every visit</span><span>New seasons are added automatically.</span></div></footer>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
