@@ -4,7 +4,10 @@
 
 
 const API = 'https://api.sleeper.app/v1';
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v4';
+
+// A commissioner's score edit is stored as custom_points; it replaces the computed score when set.
+const scoreOf = m => (m.custom_points != null ? m.custom_points : m.points) || 0;
 
 async function get(path) {
   const res = await fetch(API + path);
@@ -110,7 +113,7 @@ async function loadSeason(league, state, isCurrent) {
     winners, losers,
     picks: (picks || []).map(p => ({ round: p.round, pick_no: p.pick_no, player_id: p.player_id, roster_id: p.roster_id, picked_by: p.picked_by, pos: p.metadata && p.metadata.position })),
     matchups: matchups.map(week => (week || []).map(m => ({
-      roster_id: m.roster_id, matchup_id: m.matchup_id, points: m.points || 0,
+      roster_id: m.roster_id, matchup_id: m.matchup_id, points: scoreOf(m),
       starters: m.starters || [], players: m.players || [], players_points: m.players_points || {}
     }))),
     transactions: [].concat.apply([], transactions).filter(t => t && t.status === 'complete').map(t => ({
@@ -151,7 +154,8 @@ export async function loadAll(league, onProgress) {
 
 // Just the current week's scores, for the live tab's refresh.
 export async function loadLiveWeek(leagueId, week) {
-  return get('/league/' + leagueId + '/matchups/' + week);
+  const list = await get('/league/' + leagueId + '/matchups/' + week);
+  return (list || []).map(m => ({ ...m, points: scoreOf(m) }));
 }
 
 // ---------- start screen ----------
