@@ -133,6 +133,7 @@ document.addEventListener('click', e => {
 function renderTabs(route) {
   const items = [`<a class="pill${route.view === 'all' ? ' on' : ''}" href="${PX}all">All-Time</a>`, `<a class="pill${route.view === 'playoffs' ? ' on' : ''}" href="${PX}playoffs">Playoffs</a>`, `<a class="pill${route.view === 'search' ? ' on' : ''}" href="${PX}search">${SEARCH_ICON} Stat search</a>`,
     `<a class="pill${route.view === 'drafts' ? ' on' : ''}" href="${PX}drafts">Drafts</a>`, `<a class="pill${route.view === 'awards' ? ' on' : ''}" href="${PX}awards">Awards</a>`]
+    .concat(['<span class="tabs-label" aria-hidden="true">Seasons</span>'])
     .concat(M.seasons.map(s => `<a class="pill${route.view === 'season' && route.season === s.season ? ' on' : ''}" href="${PX}s${s.season}">${s.isCurrent ? '<span class="dot"></span>' : ''}${s.season}</a>`));
   $tabs.innerHTML = items.join('');
   const on = $tabs.querySelector('.on');
@@ -1090,6 +1091,7 @@ async function start() {
   const leagueId = params.get('league');
   const username = params.get('u') || '';
   if (!leagueId) {
+    document.body.classList.add('start');
     $leagues.innerHTML = '';
     document.getElementById('meta').textContent = 'Any Sleeper league';
     document.title = CONFIG.appName;
