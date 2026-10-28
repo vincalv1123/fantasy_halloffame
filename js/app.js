@@ -5,7 +5,6 @@
 import { CONFIG } from './config.js';
 import { loadAll, loadLiveWeek, lookupUser, nflState, userLeagues, leagueInfo } from './data.js';
 import { buildModel } from './model.js';
-import { liveContext, projectTeam, winChance, simulate4pm } from './projection.js';
 import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js';
 
 const $app = document.getElementById('app');
@@ -132,7 +131,7 @@ document.addEventListener('click', e => {
 
 // ---------- tabs ----------
 function renderTabs(route) {
-  const items = [`<a class="pill${route.view === 'all' ? ' on' : ''}" href="${PX}all">All-Time</a>`, `<a class="pill${route.view === 'search' ? ' on' : ''}" href="${PX}search">${SEARCH_ICON} Stat search</a>`,
+  const items = [`<a class="pill${route.view === 'all' ? ' on' : ''}" href="${PX}all">All-Time</a>`, `<a class="pill${route.view === 'playoffs' ? ' on' : ''}" href="${PX}playoffs">Playoffs</a>`, `<a class="pill${route.view === 'search' ? ' on' : ''}" href="${PX}search">${SEARCH_ICON} Stat search</a>`,
     `<a class="pill${route.view === 'drafts' ? ' on' : ''}" href="${PX}drafts">Drafts</a>`, `<a class="pill${route.view === 'awards' ? ' on' : ''}" href="${PX}awards">Awards</a>`]
     .concat(M.seasons.map(s => `<a class="pill${route.view === 'season' && route.season === s.season ? ' on' : ''}" href="${PX}s${s.season}">${s.isCurrent ? '<span class="dot"></span>' : ''}${s.season}</a>`));
   $tabs.innerHTML = items.join('');
@@ -314,18 +313,17 @@ function matchupPreview(S, ra, rb, week) {
     <a href="${PX}vs-${encodeURIComponent(a)}~${encodeURIComponent(b)}">Full head-to-head →</a></div>`;
 }
 
-function liveGames(S, week, list, ctx) {
+function liveGames(S, week, list) {
   const groups = {};
   (list || []).forEach(m => { if (m.matchup_id != null) (groups[m.matchup_id] = groups[m.matchup_id] || []).push(m); });
   const games = Object.values(groups).filter(g => g.length === 2);
   if (!games.length) return '<p class="lead">No matchups this week.</p>';
-  const final = week <= S.scoredThrough && !(ctx && ctx.simulated);
+  const final = week <= S.scoredThrough;
   return games.map(([a, b]) => {
     const aLead = a.points >= b.points;
     return `<div class="box"><div class="top-line"><span>Week ${week}</span><span>${final ? 'Final' : 'Live'}</span></div><div class="game">
       <a class="${aLead ? 'lead-t' : 'trail-t'}" href="${mlink(S.ownerOf[a.roster_id])}" style="text-decoration:none">${name(S.ownerOf[a.roster_id])}</a><span class="score">${f2(a.points || 0)}</span>
       <a class="${aLead ? 'trail-t' : 'lead-t'}" href="${mlink(S.ownerOf[b.roster_id])}" style="text-decoration:none">${name(S.ownerOf[b.roster_id])}</a><span class="score">${f2(b.points || 0)}</span></div>
-      ${ctx ? projBlock(S, ctx, a, b) : ''}
       ${matchupPreview(S, a.roster_id, b.roster_id, week)}</div>`;
   }).join('');
 }
@@ -379,7 +377,7 @@ function viewSeason(S) {
   if (S.isCurrent) {
     out.push(section(`<div class="eyebrow"><span class="tag live"><span class="dot"></span>Live</span><span id="updated">Scores refresh every ${CONFIG.liveRefreshSeconds} seconds</span></div>
       <h1>${S.season} season. <span class="soft">${liveWeek ? 'Week ' + liveWeek + ' is underway.' : 'Through Week ' + S.scoredThrough + '.'}</span></h1>`, 'hero'));
-    if (liveWeek) out.push(section(`<div class="head"><h2>This week's matchups</h2><span class="note">Score · projected final · win chance</span></div><p class="note" id="proj-note" style="margin:0">Loading projections…</p><div id="live-games" style="display:flex;flex-direction:column;gap:10px">${liveGames(S, liveWeek, Object.values(S.byWeek[liveWeek] || {}))}</div>`));
+    if (liveWeek) out.push(section(`<div class="head"><h2>This week's matchups</h2><span class="note">Current score</span></div><div id="live-games" style="display:flex;flex-direction:column;gap:10px">${liveGames(S, liveWeek, Object.values(S.byWeek[liveWeek] || {}))}</div>`));
     if (S.odds && !S.champion && S.regWeeks.length) {
       const O = S.odds;
       const pctLabel = x => { const p = x * 100; return p >= 99.5 && p < 100 ? '>99%' : p > 0 && p < 0.5 ? '<1%' : Math.round(p) + '%'; };
@@ -470,58 +468,20 @@ function bindPowerLegend(S, initial) {
   });
 }
 
-// Projected finals and win chance under a live matchup (see projection.js for the math).
-function projBlock(S, ctx, a, b) {
-  const ta = projectTeam(S, ctx, a); const tb = projectTeam(S, ctx, b);
-  const pa = winChance(ta, tb);
-  const left = t => {
-    const bits = [];
-    if (t.waiting) bits.push(t.waiting + ' to play');
-    if (t.playing) bits.push(t.playing + ' playing');
-    if (!t.waiting && !t.playing) bits.push('all done');
-    if (t.zero) bits.push(`<span class="down">${t.zero} out/bye/empty</span>`);
-    return bits.join(' · ');
-  };
-  const pct = x => { const p = x * 100; return p > 99.5 && p < 100 ? '>99%' : p < 0.5 && p > 0 ? '<1%' : Math.round(p) + '%'; };
-  return `<div class="proj">
-    <div class="line2"><span class="note">Proj <b class="num" style="color:#F1F4F3">${f1(ta.proj)}</b> · ${left(ta)}</span><span class="note" style="text-align:right">Proj <b class="num" style="color:#F1F4F3">${f1(tb.proj)}</b> · ${left(tb)}</span></div>
-    <div class="winbar" role="img" aria-label="Win chance ${pct(pa)} to ${pct(1 - pa)}"><i style="width:${(pa * 100).toFixed(1)}%"></i></div>
-    <div class="line2 note"><span>${pct(pa)} to win</span><span>${pct(1 - pa)}</span></div></div>`;
-}
-
-let liveState = null;
-async function initLive(S, week) {
-  const sim = params.get('sim') === '4pm';
-  const my = liveState = { S, week };
-  let list = Object.values(S.byWeek[week] || {});
-  const ctx = await liveContext(S, week, false);
-  if (liveState !== my) return;
-  if (sim) list = simulate4pm(S, ctx, week, list);
-  const el = document.getElementById('live-games');
-  if (!el) return;
-  el.innerHTML = liveGames(S, week, list, ctx);
-  const note = document.getElementById('proj-note');
-  if (note) note.innerHTML = sim
-    ? `<b class="gold-t">Simulated example:</b> halftime of the 4pm games. ${ctx.simulated ? ctx.simulated.kickoffs.final + ' games final, ' + ctx.simulated.kickoffs.halftime + ' at halftime, ' + ctx.simulated.kickoffs.later + ' not started. ' : ''}Projections are Sleeper's real ones for this week; the points scored are made up. <a href="${location.pathname}?${(() => { const q = new URLSearchParams(location.search); q.delete('sim'); return q.toString(); })()}${location.hash}">Back to live</a>`
-    : (ctx.projFailed ? "Sleeper's projections didn't load, so projections use each player's average this season." : "Projections are Sleeper's, scored with this league's settings. Live games count points so far plus half of what's left.");
-  if (!sim && week > S.scoredThrough) startLive(S, week);
-}
-
 function startLive(S, week) {
   stopLive();
   liveTimer = setInterval(async () => {
     try {
       const list = await loadLiveWeek(S.leagueId, week);
-      const ctx = await liveContext(S, week, true);
       const el = document.getElementById('live-games');
       if (!el) return stopLive();
-      el.innerHTML = liveGames(S, week, list, ctx);
+      el.innerHTML = liveGames(S, week, list);
       const u = document.getElementById('updated');
       if (u) u.textContent = 'Updated ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     } catch (e) { /* keep last scores */ }
   }, CONFIG.liveRefreshSeconds * 1000);
 }
-function stopLive() { liveState = null; if (liveTimer) { clearInterval(liveTimer); liveTimer = null; } }
+function stopLive() { if (liveTimer) { clearInterval(liveTimer); liveTimer = null; } }
 
 // ---------- Manager ----------
 const PART_LABELS = { results: 'Results', startSit: 'Start/sit', waivers: 'Waivers', trades: 'Trades', draft: 'Draft' };
@@ -783,6 +743,102 @@ function bindCompare() {
   pa.addEventListener('change', go); pb.addEventListener('change', go);
 }
 
+// ---------- Playoffs ----------
+function byeCountFor(S) { let n = 1; while (n < S.playoffTeams) n *= 2; return n - S.playoffTeams; }
+const ROUND_NAMES = (total, r) => (r === total ? 'Final' : r === total - 1 ? 'Semifinals' : r === total - 2 ? 'Quarterfinals' : 'Round ' + r);
+
+function viewPlayoffs() {
+  const done = completed();
+  const out = [];
+  out.push(section(`<div class="eyebrow">${TROPHY(GOLD, 13)} Playoff history</div>
+    <h1>Every bracket, every year. <span class="soft">Who shows up when it counts.</span></h1>`, 'hero'));
+
+  // Career playoff table.
+  const P = {};
+  const row = id => (P[id] = P[id] || { id, apps: 0, byes: 0, w: 0, l: 0, pts: 0, games: 0, finals: 0, titles: 0, regPts: 0, regGames: 0 });
+  done.forEach(S => {
+    const byes = byeCountFor(S);
+    S.playoffRids.forEach(r => { const x = row(S.ownerOf[r]); x.apps++; if (S.st[r].rank <= byes) x.byes++; });
+    S.finalists.forEach(r => { row(S.ownerOf[r]).finals++; });
+    if (S.champion) row(S.ownerOf[S.champion]).titles++;
+    S.games.filter(g => g.playoff).forEach(g => [[g.a, g.ap, g.bp], [g.b, g.bp, g.ap]].forEach(([r, mine, theirs]) => {
+      const x = row(S.ownerOf[r]); x.games++; x.pts += mine; if (mine > theirs) x.w++; else if (mine < theirs) x.l++;
+    }));
+  });
+  Object.values(P).forEach(x => { const c = M.career[x.id]; x.regPpg = c ? c.ppg : 0; });
+  const rows = Object.values(P).map(x => ({ name: name(x.id), href: mlink(x.id), wl: wl(x.w, x.l),
+    tag: x.titles ? ` <span class="note gold-t">${'★'.repeat(Math.min(x.titles, 5))}</span>` : '',
+    v: { apps: x.apps, byes: x.byes, wins: x.games ? x.w / x.games + x.w / 1000 : 0, titles: x.titles, finals: x.finals,
+      ppg: x.games ? x.pts / x.games : 0, clutch: x.games && x.regPpg ? (x.pts / x.games / x.regPpg - 1) * 100 : 0, tie: x.apps } }));
+  const cols = [
+    { key: 'pos', label: '#', cell: (r, i) => `<td class="rk">${i + 1}</td>` },
+    { key: 'name', label: 'Team', left: true, cell: r => `<td class="t"><a href="${r.href}" style="text-decoration:none">${r.name}</a>${r.tag}</td>` },
+    { key: 'apps', label: 'Apps', sortable: true, cell: r => cellNum(String(r.v.apps)) },
+    { key: 'byes', label: 'Byes', sortable: true, cell: r => cellNum(String(r.v.byes), '#C9D3D2') },
+    { key: 'wins', label: 'W–L', sortable: true, cell: r => cellNum(r.wl) },
+    { key: 'finals', label: 'Finals', sortable: true, cell: r => cellNum(String(r.v.finals), '#C9D3D2') },
+    { key: 'titles', label: 'Titles', sortable: true, cell: r => cellNum(String(r.v.titles)) },
+    { key: 'ppg', label: 'PPG', sortable: true, cell: r => cellNum(r.v.ppg ? f1(r.v.ppg) : '—', '#C9D3D2') },
+    { key: 'clutch', label: 'Clutch', sortable: true, cell: r => `<td class="${sign(r.v.clutch)}">${r.v.ppg ? signed(r.v.clutch) + '%' : '—'}</td>` }
+  ];
+  out.push(section(`<div class="head"><h2>Playoff standings</h2><span class="note">Finished seasons · tap a column to sort</span></div>
+    ${rows.length ? sortTable(cols, rows, { key: 'titles' }) : '<p class="lead">No finished playoffs yet.</p>'}
+    <span class="note">Apps = playoff appearances. Byes = first-round byes. W–L and PPG count championship-bracket games only (no 3rd-place or consolation games). Clutch = playoff PPG vs. regular-season PPG.</span>`));
+
+  // Playoff records.
+  const all = [];
+  done.forEach(S => S.games.filter(g => g.playoff).forEach(g => all.push({ S, g })));
+  if (all.length) {
+    const flat = [].concat.apply([], all.map(({ S, g }) => [{ S, g, r: g.a, me: g.ap, them: g.bp, opp: g.b }, { S, g, r: g.b, me: g.bp, them: g.ap, opp: g.a }]));
+    const hi = flat.slice().sort((a, b) => b.me - a.me)[0];
+    const lo = flat.filter(x => x.me > 0).sort((a, b) => a.me - b.me)[0];
+    const blow = all.slice().sort((a, b) => Math.abs(b.g.ap - b.g.bp) - Math.abs(a.g.ap - a.g.bp))[0];
+    const close = all.filter(x => x.g.ap !== x.g.bp).sort((a, b) => Math.abs(a.g.ap - a.g.bp) - Math.abs(b.g.ap - b.g.bp))[0];
+    const finals = flat.filter(x => x.g.placement === 1 && x.me > x.them).sort((a, b) => b.me - a.me)[0];
+    const win = x => (x.g.ap > x.g.bp ? x.g.a : x.g.b); const lose = x => (x.g.ap > x.g.bp ? x.g.b : x.g.a);
+    const tiles = [
+      ['Highest playoff score', f2(hi.me), name(hi.S.ownerOf[hi.r]), hi.S.season + ' · Week ' + hi.g.week],
+      lo ? ['Lowest playoff score', f2(lo.me), name(lo.S.ownerOf[lo.r]), lo.S.season + ' · Week ' + lo.g.week] : null,
+      ['Biggest playoff blowout', '+' + f2(Math.abs(blow.g.ap - blow.g.bp)), name(blow.S.ownerOf[win(blow)]) + ' over ' + name(blow.S.ownerOf[lose(blow)]), blow.S.season + ' · Week ' + blow.g.week],
+      close ? ['Closest playoff game', f2(Math.abs(close.g.ap - close.g.bp)), name(close.S.ownerOf[win(close)]) + ' over ' + name(close.S.ownerOf[lose(close)]), close.S.season + ' · Week ' + close.g.week] : null,
+      finals ? ['Best title-game score', f2(finals.me), name(finals.S.ownerOf[finals.r]), finals.S.season + ' final'] : null
+    ].filter(Boolean);
+    out.push(section(`<h2>Playoff records</h2><div class="tiles">${tiles.map(t => `<div class="tile"><span class="k">${t[0]}</span><span class="v">${t[1]}</span><span class="w">${t[2]}</span><span class="d">${t[3]}</span></div>`).join('')}</div>`));
+  }
+
+  // Brackets, newest first. The current season shows the seeding as it stands.
+  const cur = M.seasons.find(S => S.isCurrent && !S.champion);
+  let brackets = '';
+  if (cur && cur.regWeeks.length) {
+    const byes = byeCountFor(cur);
+    brackets += `<details class="calc" open><summary>${cur.season} · if the season ended today</summary><div class="calc-body"><div class="rows">
+      ${cur.standings.slice(0, cur.playoffTeams).map((x, i) => `<a class="row" href="${mlink(cur.ownerOf[x.rid])}" style="grid-template-columns:32px minmax(0,1fr) auto;padding:10px 0">
+        <span class="num note">${i + 1}</span><span class="stack"><span style="font-size:14px;font-weight:500">${name(cur.ownerOf[x.rid])}</span><span class="sub">${wl(x.wins, x.losses, x.ties)} · ${comma(x.pf)} PF</span></span>
+        ${i < byes ? '<span class="tag up">Bye</span>' : '<span></span>'}</a>`).join('')}</div>
+      <a class="btn" href="${PX}s${cur.season}">Playoff and title odds →</a></div></details>`;
+  }
+  done.forEach((S, k) => {
+    const seed = r => S.st[r].rank;
+    const games = S.games.filter(g => g.playoff);
+    const total = games.reduce((m, g) => Math.max(m, g.round || 0), 0);
+    const byes = byeCountFor(S);
+    const byeTeams = S.standings.slice(0, byes).map(x => x.rid);
+    const rounds = [];
+    for (let r = 1; r <= total; r++) rounds.push(games.filter(g => g.round === r));
+    const gameRow = g => { const aw = g.ap > g.bp;
+      return `<div class="pgame"><div class="line2"><span class="${aw ? 'lead-t' : 'trail-t'}"><span class="num note">${seed(g.a)}</span> ${name(S.ownerOf[g.a])}</span><span class="num ${aw ? '' : 'trail-t'}">${f2(g.ap)}</span></div>
+        <div class="line2"><span class="${!aw ? 'lead-t' : 'trail-t'}"><span class="num note">${seed(g.b)}</span> ${name(S.ownerOf[g.b])}</span><span class="num ${!aw ? '' : 'trail-t'}">${f2(g.bp)}</span></div></div>`; };
+    brackets += `<details class="calc"${k === 0 && !brackets ? ' open' : ''}><summary><span>${S.season}${S.champion ? ` · <span class="gold-t">${name(S.ownerOf[S.champion])}</span>` : ''}</span></summary><div class="calc-body">
+      ${byeTeams.length ? `<p class="note" style="margin:0">Byes: ${byeTeams.map(r => '<span class="num">' + seed(r) + '</span> ' + name(S.ownerOf[r])).join(', ')}</p>` : ''}
+      ${rounds.map((g, i) => `<div class="stack" style="gap:8px"><span class="note" style="text-transform:uppercase;letter-spacing:.05em;font-size:11px">${ROUND_NAMES(total, i + 1)} · Week ${S.playoffWeekStart + i}</span>${g.map(gameRow).join('')}</div>`).join('')}
+      ${S.champion ? `<p style="margin:0;display:flex;align-items:center;gap:8px">${TROPHY(GOLD, 16)} <b>${name(S.ownerOf[S.champion])}</b> <span class="note">won the ${S.season} title</span></p>` : ''}
+    </div></details>`;
+  });
+  out.push(section(`<h2>Brackets</h2><div style="display:flex;flex-direction:column;gap:8px">${brackets || '<p class="lead">No playoffs yet.</p>'}</div>
+    <span class="note">Numbers are seeds. Winners in white.</span>`));
+  return out.join('');
+}
+
 // ---------- Draft history ----------
 const GRADE_COLORS = { A: '#5FC79B', B: '#9FD8B8', C: '#C9D3D2', D: '#F2B59E', F: '#F0907A' };
 function gradeOf(z) { return z >= 1 ? 'A' : z >= 0.33 ? 'B' : z >= -0.33 ? 'C' : z >= -1 ? 'D' : 'F'; }
@@ -974,6 +1030,7 @@ function parse(h) {
   if (h.indexOf('m-') === 0) { const p = h.slice(2).split('@'); return { view: 'manager', id: p[0], season: p[1] || null }; }
   if (h === 'search') return { view: 'search' };
   if (h === 'awards') return { view: 'awards' };
+  if (h === 'playoffs') return { view: 'playoffs' };
   if (h === 'drafts' || h.indexOf('drafts@') === 0) return { view: 'drafts', season: h.split('@')[1] || null };
   if (h.indexOf('vs-') === 0) { const p = h.slice(3).split('~'); return { view: 'compare', a: p[0], b: p[1] }; }
   return { view: 'all' };
@@ -998,7 +1055,7 @@ function render() {
     const v = viewSeason(S);
     $app.innerHTML = v.html;
     bindPowerLegend(S, v.defaultHL);
-    if (v.liveWeek) initLive(S, v.liveWeek);
+    if (v.liveWeek && v.liveWeek > S.scoredThrough) startLive(S, v.liveWeek);
     document.title = S.season + suffix;
   } else if (route.view === 'manager') {
     $app.innerHTML = viewManager(route.id, route.season);
@@ -1010,6 +1067,9 @@ function render() {
   } else if (route.view === 'drafts') {
     $app.innerHTML = viewDrafts(route.season);
     document.title = 'Drafts' + suffix;
+  } else if (route.view === 'playoffs') {
+    $app.innerHTML = viewPlayoffs();
+    document.title = 'Playoffs' + suffix;
   } else if (route.view === 'awards') {
     $app.innerHTML = viewAwards();
     document.title = 'Awards' + suffix;

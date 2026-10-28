@@ -200,13 +200,6 @@ details.round + details.round { margin-top: 8px; }
 .modal .close { flex: none; width: 40px; height: 40px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--panel); color: var(--fg); font-size: 15px; cursor: pointer; }
 .modal .close:hover { border-color: var(--fg-2); }
 
-/* Live projections */
-.proj { display: flex; flex-direction: column; gap: 6px; padding-top: 2px; }
-.proj .note b { font-weight: 500; }
-.winbar { height: 6px; border-radius: 3px; background: var(--line-strong); overflow: hidden; }
-.winbar i { display: block; height: 100%; background: var(--fg-2); border-radius: 3px 0 0 3px; transition: width .4s ease; }
-@media (prefers-reduced-motion: reduce) { .winbar i { transition: none; } }
-
 /* Stat search */
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .search { display: flex; gap: 8px; margin-top: 6px; }
@@ -234,3 +227,10 @@ svg text { font-family: var(--mono); }
   .tag.live .dot { animation: pulse 1.6s ease-in-out infinite; }
   @keyframes pulse { 50% { opacity: 0.3; } }
 }
+
+/* Playoff brackets */
+.pgame { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 14px; }
+.pgame .num { font-size: 14px; }
+.pgame .note.num { font-size: 11px; margin-right: 4px; }
+.pgame .lead-t { font-weight: 600; color: var(--fg); }
+.pgame .trail-t { color: var(--muted); }
