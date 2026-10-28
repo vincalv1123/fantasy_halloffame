@@ -919,7 +919,7 @@ function viewDrafts(seasonSel) {
     <h1>${S.season} draft. <span class="soft">${showGrades ? nm(teams[0].r) + ' drafted best, ' + nm(teams[teams.length - 1].r) + ' worst.' : 'Every pick, round by round.'}</span></h1>
     <nav class="chips" aria-label="Choose a draft">${withPicks.map(x => `<a class="pill${x === S ? ' on' : ''}" href="${PX}drafts@${x.season}">${x.season}</a>`).join('')}</nav>`, 'hero'));
 
-  if (showGrades) out.push(section(`<div class="head"><h2>Team grades</h2><span class="note">Positional value vs. picks near the same slots${S.isCurrent ? ', so far' : ''}</span></div>
+  if (showGrades) out.push(section(`<div class="head"><h2>Team grades</h2><span class="note">Positional value vs. what each pick number usually produces${S.isCurrent ? ', so far' : ''}</span></div>
     <div class="rows">${teams.map(t => `<button type="button" class="row rowbtn" data-draft-team="${S.season}:${t.r}" style="grid-template-columns:40px minmax(0,1fr) auto">
       <span class="grade" style="background:${GRADE_COLORS[t.grade]}">${t.grade}</span>
       <span class="stack"><span class="name" style="font-size:15px">${nm(t.r)}</span><span class="sub">${t.best ? 'Best pick: ' + player(t.best.player_id) + ' (R' + t.best.round + ')' : 'No picks'}</span></span>

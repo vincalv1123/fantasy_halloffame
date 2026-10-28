@@ -319,8 +319,11 @@ function buildSeason(raw, players, isNewest, later, format, opts) {
   picks.forEach(p => {
     if (curve) p.expected = curve(p.pick_no);
     else p.expected = mean(picks.filter(q => Math.abs(q.pick_no - p.pick_no) <= 6).map(q => q.vor));
-    p.value = p.vor - p.expected;
   });
+  // The curve sets the shape (how value falls off by pick); re-centering keeps each draft's picks
+  // averaging zero, so a strong or weak season overall doesn't push every team up or down.
+  const offset = curve ? mean(picks.map(p => p.vor - p.expected)) : 0;
+  picks.forEach(p => { p.expected += offset; p.value = p.vor - p.expected; });
   // Positional draft rank: the order each position came off the board (WR1 = first WR taken).
   const posCount = {};
   picks.slice().sort((a, b) => a.pick_no - b.pick_no).forEach(p => { posCount[p.pos] = (posCount[p.pos] || 0) + 1; p.posDrafted = posCount[p.pos]; });
@@ -522,13 +525,14 @@ function simulateOdds(S, raw, byWeek, st) {
 }
 
 // Expected positional value by overall pick number, smoothed across the league's finished drafts.
-// Only drafts of a similar size are pooled (a dynasty startup draft isn't compared with a rookie draft).
+// Only drafts with the same number of teams and a similar number of picks are pooled
+// (a 10-team draft isn't compared with a 12-team one, nor a dynasty startup with a rookie draft).
 // For a season still in progress, the curve is scaled down to the share of the regular season played.
 function draftCurves(seasons) {
   const drafts = seasons.filter(S => S.picks.length);
   const curves = {};
   drafts.forEach(S => {
-    const peers = drafts.filter(D => !D.isCurrent && Math.abs(D.picks.length - S.picks.length) <= 0.25 * S.picks.length);
+    const peers = drafts.filter(D => !D.isCurrent && D.rids.length === S.rids.length && Math.abs(D.picks.length - S.picks.length) <= 0.25 * S.picks.length);
     const pool = [].concat.apply([], peers.map(D => D.picks.map(p => ({ k: p.pick_no, v: p.vor }))));
     if (pool.length < 40) return;
     const full = Math.max(1, S.playoffWeekStart - 1);
