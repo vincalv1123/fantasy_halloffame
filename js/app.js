@@ -5,6 +5,7 @@
 import { CONFIG } from './config.js';
 import { loadAll, loadLiveWeek, lookupUser, nflState, userLeagues, leagueInfo } from './data.js';
 import { buildModel } from './model.js';
+import { liveContext, projectTeam, winChance, simulate4pm } from './projection.js';
 import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js';
 
 const $app = document.getElementById('app');
@@ -313,17 +314,18 @@ function matchupPreview(S, ra, rb, week) {
     <a href="${PX}vs-${encodeURIComponent(a)}~${encodeURIComponent(b)}">Full head-to-head →</a></div>`;
 }
 
-function liveGames(S, week, list) {
+function liveGames(S, week, list, ctx) {
   const groups = {};
   (list || []).forEach(m => { if (m.matchup_id != null) (groups[m.matchup_id] = groups[m.matchup_id] || []).push(m); });
   const games = Object.values(groups).filter(g => g.length === 2);
   if (!games.length) return '<p class="lead">No matchups this week.</p>';
-  const final = week <= S.scoredThrough;
+  const final = week <= S.scoredThrough && !(ctx && ctx.simulated);
   return games.map(([a, b]) => {
     const aLead = a.points >= b.points;
     return `<div class="box"><div class="top-line"><span>Week ${week}</span><span>${final ? 'Final' : 'Live'}</span></div><div class="game">
       <a class="${aLead ? 'lead-t' : 'trail-t'}" href="${mlink(S.ownerOf[a.roster_id])}" style="text-decoration:none">${name(S.ownerOf[a.roster_id])}</a><span class="score">${f2(a.points || 0)}</span>
       <a class="${aLead ? 'trail-t' : 'lead-t'}" href="${mlink(S.ownerOf[b.roster_id])}" style="text-decoration:none">${name(S.ownerOf[b.roster_id])}</a><span class="score">${f2(b.points || 0)}</span></div>
+      ${ctx ? projBlock(S, ctx, a, b) : ''}
       ${matchupPreview(S, a.roster_id, b.roster_id, week)}</div>`;
   }).join('');
 }
@@ -377,7 +379,7 @@ function viewSeason(S) {
   if (S.isCurrent) {
     out.push(section(`<div class="eyebrow"><span class="tag live"><span class="dot"></span>Live</span><span id="updated">Scores refresh every ${CONFIG.liveRefreshSeconds} seconds</span></div>
       <h1>${S.season} season. <span class="soft">${liveWeek ? 'Week ' + liveWeek + ' is underway.' : 'Through Week ' + S.scoredThrough + '.'}</span></h1>`, 'hero'));
-    if (liveWeek) out.push(section(`<div class="head"><h2>This week's matchups</h2><span class="note">Current score</span></div><div id="live-games" style="display:flex;flex-direction:column;gap:10px">${liveGames(S, liveWeek, Object.values(S.byWeek[liveWeek] || {}))}</div>`));
+    if (liveWeek) out.push(section(`<div class="head"><h2>This week's matchups</h2><span class="note">Score · projected final · win chance</span></div><p class="note" id="proj-note" style="margin:0">Loading projections…</p><div id="live-games" style="display:flex;flex-direction:column;gap:10px">${liveGames(S, liveWeek, Object.values(S.byWeek[liveWeek] || {}))}</div>`));
     if (S.odds && !S.champion && S.regWeeks.length) {
       const O = S.odds;
       const pctLabel = x => { const p = x * 100; return p >= 99.5 && p < 100 ? '>99%' : p > 0 && p < 0.5 ? '<1%' : Math.round(p) + '%'; };
@@ -468,20 +470,58 @@ function bindPowerLegend(S, initial) {
   });
 }
 
+// Projected finals and win chance under a live matchup (see projection.js for the math).
+function projBlock(S, ctx, a, b) {
+  const ta = projectTeam(S, ctx, a); const tb = projectTeam(S, ctx, b);
+  const pa = winChance(ta, tb);
+  const left = t => {
+    const bits = [];
+    if (t.waiting) bits.push(t.waiting + ' to play');
+    if (t.playing) bits.push(t.playing + ' playing');
+    if (!t.waiting && !t.playing) bits.push('all done');
+    if (t.zero) bits.push(`<span class="down">${t.zero} out/bye/empty</span>`);
+    return bits.join(' · ');
+  };
+  const pct = x => { const p = x * 100; return p > 99.5 && p < 100 ? '>99%' : p < 0.5 && p > 0 ? '<1%' : Math.round(p) + '%'; };
+  return `<div class="proj">
+    <div class="line2"><span class="note">Proj <b class="num" style="color:#F1F4F3">${f1(ta.proj)}</b> · ${left(ta)}</span><span class="note" style="text-align:right">Proj <b class="num" style="color:#F1F4F3">${f1(tb.proj)}</b> · ${left(tb)}</span></div>
+    <div class="winbar" role="img" aria-label="Win chance ${pct(pa)} to ${pct(1 - pa)}"><i style="width:${(pa * 100).toFixed(1)}%"></i></div>
+    <div class="line2 note"><span>${pct(pa)} to win</span><span>${pct(1 - pa)}</span></div></div>`;
+}
+
+let liveState = null;
+async function initLive(S, week) {
+  const sim = params.get('sim') === '4pm';
+  const my = liveState = { S, week };
+  let list = Object.values(S.byWeek[week] || {});
+  const ctx = await liveContext(S, week, false);
+  if (liveState !== my) return;
+  if (sim) list = simulate4pm(S, ctx, week, list);
+  const el = document.getElementById('live-games');
+  if (!el) return;
+  el.innerHTML = liveGames(S, week, list, ctx);
+  const note = document.getElementById('proj-note');
+  if (note) note.innerHTML = sim
+    ? `<b class="gold-t">Simulated example:</b> halftime of the 4pm games. ${ctx.simulated ? ctx.simulated.kickoffs.final + ' games final, ' + ctx.simulated.kickoffs.halftime + ' at halftime, ' + ctx.simulated.kickoffs.later + ' not started. ' : ''}Projections are Sleeper's real ones for this week; the points scored are made up. <a href="${location.pathname}?${(() => { const q = new URLSearchParams(location.search); q.delete('sim'); return q.toString(); })()}${location.hash}">Back to live</a>`
+    : (ctx.projFailed ? "Sleeper's projections didn't load, so projections use each player's average this season." : "Projections are Sleeper's, scored with this league's settings. Live games count points so far plus half of what's left.");
+  if (!sim && week > S.scoredThrough) startLive(S, week);
+}
+
 function startLive(S, week) {
   stopLive();
   liveTimer = setInterval(async () => {
     try {
       const list = await loadLiveWeek(S.leagueId, week);
+      const ctx = await liveContext(S, week, true);
       const el = document.getElementById('live-games');
       if (!el) return stopLive();
-      el.innerHTML = liveGames(S, week, list);
+      el.innerHTML = liveGames(S, week, list, ctx);
       const u = document.getElementById('updated');
       if (u) u.textContent = 'Updated ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     } catch (e) { /* keep last scores */ }
   }, CONFIG.liveRefreshSeconds * 1000);
 }
-function stopLive() { if (liveTimer) { clearInterval(liveTimer); liveTimer = null; } }
+function stopLive() { liveState = null; if (liveTimer) { clearInterval(liveTimer); liveTimer = null; } }
 
 // ---------- Manager ----------
 const PART_LABELS = { results: 'Results', startSit: 'Start/sit', waivers: 'Waivers', trades: 'Trades', draft: 'Draft' };
@@ -958,7 +998,7 @@ function render() {
     const v = viewSeason(S);
     $app.innerHTML = v.html;
     bindPowerLegend(S, v.defaultHL);
-    if (v.liveWeek && v.liveWeek > S.scoredThrough) startLive(S, v.liveWeek);
+    if (v.liveWeek) initLive(S, v.liveWeek);
     document.title = S.season + suffix;
   } else if (route.view === 'manager') {
     $app.innerHTML = viewManager(route.id, route.season);

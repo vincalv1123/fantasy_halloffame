@@ -78,6 +78,7 @@ function buildSeason(raw, players, isNewest, later, format) {
   const posOf = id => positionOf(id) || pickPos[id] || '';
   const slots = raw.rosterPositions;
   S.slots = slots.filter(s => ELIGIBLE[s]);
+  S.scoring = raw.scoring || {};
   S.posOf = id => posOf(id);
 
   // Week-by-week lookups.

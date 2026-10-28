@@ -97,6 +97,7 @@ async function loadSeason(league, state, isCurrent) {
     waiverBudget: league.settings.waiver_budget,
     scoredThrough,
     currentWeek: isCurrent ? state.week : null,
+    scoring: league.scoring_settings || {},
     users: users.map(u => ({ user_id: u.user_id, display_name: u.display_name, team_name: u.metadata && u.metadata.team_name, avatar: u.avatar })),
     rosters: rosters.map(r => ({ roster_id: r.roster_id, owner_id: r.owner_id, taxi: r.taxi || [] })),
     winners, losers,
@@ -172,4 +173,23 @@ export async function leagueInfo(id) {
   const l = await get('/league/' + id);
   if (!l) return null;
   return { id: l.league_id, name: l.name, season: l.season, format: l.settings && l.settings.type === 2 ? 'dynasty' : l.settings && l.settings.type === 1 ? 'keeper' : 'redraft' };
+}
+
+// ---------- live projections ----------
+// Sleeper's own weekly projections and NFL schedule. These come from api.sleeper.com, which the
+// Sleeper app uses but isn't an official public API, so callers handle failure.
+const SITE = 'https://api.sleeper.com';
+export async function loadProjections(season, week) {
+  const pos = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].map(p => 'position[]=' + p).join('&');
+  const res = await fetch(SITE + '/projections/nfl/' + season + '/' + week + '?season_type=regular&' + pos);
+  if (!res.ok) throw new Error('projections ' + res.status);
+  const list = await res.json();
+  const out = {};
+  list.forEach(x => { out[x.player_id] = { stats: x.stats || {}, team: x.team, injury: x.player && x.player.injury_status }; });
+  return out;
+}
+export async function loadSchedule(season) {
+  const res = await fetch(SITE + '/schedule/nfl/regular/' + season);
+  if (!res.ok) throw new Error('schedule ' + res.status);
+  return res.json();
 }
