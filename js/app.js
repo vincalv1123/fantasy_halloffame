@@ -893,12 +893,15 @@ function viewPlayoffs() {
 const GRADE_COLORS = { A: '#5FC79B', B: '#9FD8B8', C: '#C9D3D2', D: '#F2B59E', F: '#F0907A' };
 function gradeOf(z) { return z >= 1 ? 'A' : z >= 0.33 ? 'B' : z >= -0.33 ? 'C' : z >= -1 ? 'D' : 'F'; }
 
+// "Best pick" labels skip kickers and defenses (they still count toward every grade).
+const notKDef = p => p.pos !== 'K' && p.pos !== 'DEF';
+
 // Team draft grades: total value of each team's picks, scored against the other teams (A–F).
 function draftTeamGrades(S) {
   const teams = S.rids.map(r => {
     const picks = S.picks.filter(p => p.roster_id === r);
     const total = picks.reduce((t, p) => t + p.value, 0);
-    const best = picks.slice().sort((a, b) => b.value - a.value)[0];
+    const best = picks.filter(notKDef).sort((a, b) => b.value - a.value)[0];
     return { r, picks, total, best };
   });
   const xs = teams.map(t => t.total); const m = xs.reduce((a, b) => a + b, 0) / xs.length;
@@ -943,9 +946,9 @@ function viewDrafts(seasonSel) {
   const rounds = [...new Set(S.picks.map(p => p.round))].sort((a, b) => a - b);
   out.push(section(`<h2>Round by round</h2>${rounds.map(rd => {
     const picks = S.picks.filter(p => p.round === rd).sort((a, b) => a.pick_no - b.pick_no);
-    const best = picks.slice().sort((a, b) => b.value - a.value)[0];
+    const best = picks.filter(notKDef).sort((a, b) => b.value - a.value)[0];
     const worst = rd < 10 ? picks.slice().sort((a, b) => a.value - b.value)[0] : null;
-    return `<details class="calc round"${rd <= 2 ? ' open' : ''}><summary>Round ${rd}<span class="note" style="font-weight:400;margin-left:auto;margin-right:12px">Best: ${player(best.player_id)}</span></summary><div class="calc-body" style="padding-top:4px">
+    return `<details class="calc round"${rd <= 2 ? ' open' : ''}><summary>Round ${rd}<span class="note" style="font-weight:400;margin-left:auto;margin-right:12px">Best: ${best ? player(best.player_id) : "—"}</span></summary><div class="calc-body" style="padding-top:4px">
       <div class="scroll"><table class="table"><thead><tr><th>Pick</th><th style="text-align:left">Player</th><th>Pts</th><th>Drafted</th><th>Finish</th><th>Above repl.</th>${dynasty ? '<th>Since</th>' : ''}<th>vs. slot</th></tr></thead><tbody>
       ${picks.map(p => `<tr><td class="rk" style="width:auto">${p.round}.${String(((p.pick_no - 1) % n) + 1).padStart(2, '0')}</td>
         <td class="t"><span style="display:flex;flex-direction:column;gap:2px"><span>${player(p.player_id)} <span class="note">${esc(p.pos)}</span>${p === best ? ' <span class="tag up">Best</span>' : p === worst ? ' <span class="tag down">Worst</span>' : ''}</span>
@@ -983,7 +986,7 @@ function openDraftTeam(season, rid) {
   const tsd = Math.sqrt(teamTotals.reduce((a, b) => a + (b - tm) * (b - tm), 0) / Math.max(1, teamTotals.length - 1)) || 1;
   const teamGrade = gradeOf((total - tm) / tsd);
   const rank = teamTotals.slice().sort((a, b) => b - a).indexOf(total) + 1;
-  const best = picks.slice().sort((a, b) => b.value - a.value)[0];
+  const best = picks.filter(notKDef).sort((a, b) => b.value - a.value)[0];
   const worst = picks.filter(p => p.round < 10).sort((a, b) => a.value - b.value)[0];
   const id = S.ownerOf[rid];
   let dlg = document.getElementById('draft-modal');

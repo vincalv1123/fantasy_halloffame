@@ -337,7 +337,9 @@ function buildSeason(raw, players, isNewest, later, format, opts) {
   picks.forEach(p => { if (draftVal[p.roster_id] != null) draftVal[p.roster_id] += p.value; });
   S.picks = picks;
   S.draftValue = draftVal;
-  S.steal = picks.length ? picks.slice().sort((a, b) => b.value - a.value)[0] : null;
+  // Kickers and defenses can't be the steal; they still count toward grades.
+  const skill = picks.filter(p => p.pos !== 'K' && p.pos !== 'DEF');
+  S.steal = skill.length ? skill.slice().sort((a, b) => b.value - a.value)[0] : null;
   const early = picks.filter(p => p.round <= 3);
   S.bust = early.length ? early.slice().sort((a, b) => a.value - b.value)[0] : null;
 
