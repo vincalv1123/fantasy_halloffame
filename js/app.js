@@ -38,6 +38,97 @@ const completed = () => M.seasons.filter(s => !s.isCurrent);
 const posLabel = pid => { const p = M.playerPos(pid); return p ? ' · ' + p : ''; };
 const player = pid => esc(M.playerName(pid));
 
+// ---------- sortable tables ----------
+// A table whose sortable column headers re-sort its rows in place. Each column:
+// { key, label, left?, desc? (default direction), cell(row, i) }. Rows carry their sort values in row.v.
+const SORTS = {};
+let sortSeq = 0;
+function sortTable(cols, rows, opts) {
+  const id = 'sort' + (++sortSeq);
+  SORTS[id] = { cols, rows, key: opts.key, desc: opts.desc !== false, cut: opts.cut, cutKey: opts.cutKey || opts.key };
+  return `<div class="scroll"><table class="table sortable" id="${id}">${sortHead(id)}<tbody>${sortBody(id)}</tbody></table></div>`;
+}
+function sortHead(id) {
+  const T = SORTS[id];
+  return '<thead><tr>' + T.cols.map(c => {
+    const align = c.left ? ' style="text-align:left"' : '';
+    if (!c.sortable) return `<th${align}>${c.label}</th>`;
+    const on = T.key === c.key;
+    return `<th${align} aria-sort="${on ? (T.desc ? 'descending' : 'ascending') : 'none'}"><button type="button" class="sort${on ? ' on' : ''}" data-sort="${id}" data-key="${c.key}">${c.label}<span class="arrow" aria-hidden="true">${on ? (T.desc ? '↓' : '↑') : '↕'}</span></button></th>`;
+  }).join('') + '</tr></thead>';
+}
+function sortBody(id) {
+  const T = SORTS[id];
+  const rows = T.rows.slice().sort((a, b) => (T.desc ? b.v[T.key] - a.v[T.key] : a.v[T.key] - b.v[T.key]) || (b.v.tie || 0) - (a.v.tie || 0));
+  return rows.map((r, i) => `<tr class="${T.cut && T.key === T.cutKey && T.desc && i === T.cut ? 'cut' : ''}">${T.cols.map(c => c.cell(r, i)).join('')}</tr>`).join('');
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('button[data-sort]');
+  if (!b) return;
+  const T = SORTS[b.dataset.sort];
+  if (!T) return;
+  const k = b.dataset.key;
+  if (T.key === k) T.desc = !T.desc; else { T.key = k; T.desc = T.cols.find(c => c.key === k).desc !== false; }
+  const tbl = document.getElementById(b.dataset.sort);
+  tbl.querySelector('thead').outerHTML = sortHead(b.dataset.sort);
+  tbl.querySelector('tbody').innerHTML = sortBody(b.dataset.sort);
+  const nb = tbl.querySelector(`button[data-key="${k}"]`); if (nb) nb.focus();
+});
+
+const cellNum = (txt, color) => `<td${color ? ` style="color:${color}"` : ''}>${txt}</td>`;
+function standingsColumns(extra) {
+  return [
+    { key: 'pos', label: '#', cell: (r, i) => `<td class="rk">${i + 1}</td>` },
+    { key: 'name', label: 'Team', left: true, cell: r => `<td class="t"><a href="${r.href}" style="text-decoration:none">${r.name}</a>${r.tag || ''}</td>` }
+  ].concat(extra || []).concat([
+    { key: 'wins', label: 'W–L', sortable: true, cell: r => cellNum(r.wl) },
+    { key: 'pf', label: 'PF', sortable: true, cell: r => cellNum(comma(r.v.pf)) },
+    { key: 'pa', label: 'PA', sortable: true, cell: r => cellNum(comma(r.v.pa), '#C9D3D2') },
+    { key: 'maxPf', label: 'Max PF', sortable: true, cell: r => cellNum(comma(r.v.maxPf), '#C9D3D2') },
+    { key: 'ap', label: 'All-play', sortable: true, cell: r => cellNum(pct3(r.v.ap), '#C9D3D2') }
+  ]);
+}
+
+// ---------- trade pop-up ----------
+const TRADES = [];
+function tradeAttr(t) { let i = TRADES.indexOf(t); if (i < 0) i = TRADES.push(t) - 1; return ` data-trade="${i}"`; }
+function openTrade(i) {
+  const t = TRADES[i];
+  if (!t) return;
+  const S = seasonOf(t.season);
+  const ownerOf = s => s.owner || (S ? S.ownerOf[s.rid] : null);
+  const dynasty = LG && LG.format === 'dynasty';
+  let dlg = document.getElementById('trade-modal');
+  if (!dlg) {
+    dlg = document.createElement('dialog');
+    dlg.id = 'trade-modal';
+    dlg.className = 'modal';
+    dlg.setAttribute('aria-labelledby', 'trade-title');
+    document.body.appendChild(dlg);
+    dlg.addEventListener('click', e => { if (e.target === dlg || e.target.closest('[data-close]')) dlg.close(); });
+  }
+  const pickLabel = d => `${d.season} round ${d.round} pick${S && d.orig !== d.to && S.ownerOf[d.orig] ? ` <span class="note">(originally ${name(S.ownerOf[d.orig])}'s)</span>` : ''}`;
+  dlg.innerHTML = `<div class="modal-card">
+    <div class="line2" style="align-items:center"><h2 id="trade-title" style="font-size:18px">Trade · ${t.season} Week ${t.week}</h2>
+      <button type="button" class="close" data-close aria-label="Close">✕</button></div>
+    ${t.sides.map(s => { const id = ownerOf(s);
+      return `<div class="side"><div class="line2"><a class="name" href="${mlink(id)}" style="text-decoration:none" data-close>${name(id)}</a>
+        <span class="num ${sign(s.net)}" style="font-size:16px">${signed(s.net)}</span></div>
+        <span class="note" style="text-transform:uppercase;letter-spacing:.05em;font-size:11px">Received</span>
+        <div class="rows">${s.got.map(g => `<div class="row" style="grid-template-columns:minmax(0,1fr) auto;padding:9px 0">
+            <span style="font-size:14px">${player(g.pid)} <span class="note">${esc(M.playerPos(g.pid))}</span></span><span class="num" style="font-size:13px">${f1(g.pts)} pts</span></div>`).join('')}
+          ${(s.picks || []).map(d => `<div class="row" style="grid-template-columns:minmax(0,1fr) auto;padding:9px 0"><span style="font-size:14px">${pickLabel(d)}</span><span class="note">pick</span></div>`).join('')}
+          ${!s.got.length && !(s.picks || []).length ? '<p class="note" style="margin:8px 0 0">Nothing on record (FAAB or other).</p>' : ''}</div></div>`; }).join('')}
+    <p class="note" style="margin:0">Pts = starter points each player scored for his new team after the trade${dynasty ? ', including later seasons while he stayed' : ', rest of that season'}. The number by each name is the net. Picks count as 0.</p>
+  </div>`;
+  if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
+  const c = dlg.querySelector('.close'); if (c) c.focus();
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-trade]');
+  if (b) { e.preventDefault(); openTrade(Number(b.dataset.trade)); }
+});
+
 // ---------- tabs ----------
 function renderTabs(route) {
   const items = [`<a class="pill${route.view === 'all' ? ' on' : ''}" href="${PX}all">All-Time</a>`, `<a class="pill${route.view === 'search' ? ' on' : ''}" href="${PX}search">${SEARCH_ICON} Stat search</a>`,
@@ -84,6 +175,12 @@ function viewAll() {
   }
 
   const lb = M.leaderboard;
+  const atRows = lb.map(c => ({ name: name(c.id), href: mlink(c.id), wl: wl(c.wins, c.losses, c.ties),
+    tag: c.titles ? ` <span class="note gold-t">${'★'.repeat(Math.min(c.titles, 5))}</span>` : '',
+    v: { wins: c.winPct, pf: c.pf, pa: c.pa, maxPf: c.maxPf, ap: c.allPlayPct, seasons: c.bySeason.length, titles: c.titles, tie: c.pf } }));
+  out.push(section(`<div class="head"><h2>All-time standings</h2><span class="note">Regular season · tap a column to sort</span></div>
+    ${sortTable(standingsColumns([{ key: 'seasons', label: 'Yrs', sortable: true, cell: r => cellNum(String(r.v.seasons), '#8A9C9F') }]).concat([{ key: 'titles', label: 'Titles', sortable: true, cell: r => cellNum(String(r.v.titles)) }]), atRows, { key: 'wins' })}
+    <span class="note">W–L sorts by win %. ★ = titles.</span>`));
   out.push(section(`<div class="head"><h2>Manager Score</h2><span class="note">Career · 0–100 · 50 is average</span></div>
     <div class="rows">${lb.map((c, i) => {
       const best = i === 0; const worst = i === lb.length - 1 && lb.length > 1;
@@ -120,9 +217,9 @@ function viewAll() {
       <span class="note">${riv.games} games · average margin ${f1(riv.margin / riv.games)} pts${riv.playoff ? ' · ' + riv.playoff + ' playoff meeting' + (riv.playoff > 1 ? 's' : '') : ''}</span></a>`;
     if (heist && heist.side.net > 0) {
       const others = heist.trade.sides.filter(s => s.owner !== heist.side.owner).map(s => name(s.owner)).join(' & ');
-      html += `<div class="box"><span class="note" style="text-transform:uppercase;letter-spacing:.05em;font-size:11px">Biggest trade heist</span>
+      html += `<button type="button" class="box tradebtn"${tradeAttr(heist.trade)}><span class="note" style="text-transform:uppercase;letter-spacing:.05em;font-size:11px">Biggest trade heist · tap for details</span>
         <div class="line2"><span style="font-weight:600">${name(heist.side.owner)} over ${others}</span><span class="num up">${signed(heist.side.net)}</span></div>
-        <span class="note">${heist.trade.season} · Week ${heist.trade.week} · got ${heist.side.got.map(g => player(g.pid)).join(', ') || 'picks'} · starter pts gained, ${LG.format === 'dynasty' ? 'including later seasons' : 'rest of season'}</span></div>`;
+        <span class="note">${heist.trade.season} · Week ${heist.trade.week} · got ${heist.side.got.map(g => player(g.pid)).join(', ') || 'picks'} · starter pts gained, ${LG.format === 'dynasty' ? 'including later seasons' : 'rest of season'}</span></button>`;
     }
     out.push(section(html));
   }
@@ -304,11 +401,11 @@ function viewSeason(S) {
       ${S.runnerUp ? `<span class="chip">Runner-up · ${nm(S.runnerUp)}</span>` : ''}${S.lastPlace ? `<span class="chip">Last · ${nm(S.lastPlace)}</span>` : ''}</div>`, 'hero'));
   }
 
-  out.push(section(`<h2>${S.isCurrent ? 'Standings' : 'Final standings'}</h2>
-    <div class="scroll"><table class="table"><thead><tr><th>#</th><th style="text-align:left">Team</th><th>W–L</th><th>PF</th><th>All-play</th></tr></thead><tbody>
-    ${S.standings.map((s, i) => `<tr class="${i === S.playoffTeams ? 'cut' : ''}"><td class="rk">${s.rank}</td><td class="t"><a href="${ml(s.rid)}" style="text-decoration:none">${nm(s.rid)}</a></td>
-      <td>${wl(s.wins, s.losses, s.ties)}</td><td>${comma(s.pf)}</td><td style="color:#C9D3D2">${pct3(s.allPlayPct)}</td></tr>`).join('')}</tbody></table></div>
-    <span class="note">Dashed line = playoff cut (top ${S.playoffTeams}). All-play = win rate if you'd played every team every week.</span>`));
+  const stRows = S.standings.map(x => ({ name: nm(x.rid), href: ml(x.rid), wl: wl(x.wins, x.losses, x.ties),
+    v: { wins: S.standings.length - x.rank, pf: x.pf, pa: x.pa, maxPf: x.maxPf, ap: x.allPlayPct, tie: x.pf } }));
+  out.push(section(`<div class="head"><h2>${S.isCurrent ? 'Standings' : 'Final standings'}</h2><span class="note">Tap a column to sort</span></div>
+    ${sortTable(standingsColumns(), stRows, { key: 'wins', cut: S.playoffTeams })}
+    <span class="note">Dashed line = playoff cut (top ${S.playoffTeams}), shown when sorted by W–L. Max PF = points from the best possible lineup every week. All-play = win rate if you'd played every team every week.</span>`));
 
   const defaultHL = [S.champion || S.standings[0].rid, S.runnerUp || (S.standings[1] && S.standings[1].rid), S.standings[S.standings.length - 1].rid].filter((v, i, a) => v && a.indexOf(v) === i);
   out.push(section(`<div class="head"><h2>Power rankings</h2><span class="note">Rank by total points for, each week</span></div>
@@ -335,10 +432,10 @@ function viewSeason(S) {
 
   if (S.trades.length) {
     out.push(section(`<div class="head"><h2>Trades</h2><span class="note">${S.trades.length} trade${S.trades.length > 1 ? 's' : ''} · ${LG.format === 'dynasty' ? 'starter pts since, all seasons' : 'starter pts for the rest of the season'}</span></div>
-      <div style="display:flex;flex-direction:column;gap:10px">${S.trades.slice().reverse().map(t => `<div class="box"><div class="top-line"><span>Week ${t.week}</span><span>Net starter pts</span></div>
-      ${t.sides.map(s => `<div class="line2"><span style="font-size:14px;min-width:0"><a href="${ml(s.rid)}" style="text-decoration:none;font-weight:500">${nm(s.rid)}</a>
+      <div style="display:flex;flex-direction:column;gap:10px">${S.trades.slice().reverse().map(t => `<button type="button" class="box tradebtn"${tradeAttr(t)}><div class="top-line"><span>Week ${t.week}</span><span>Tap for details</span></div>
+      ${t.sides.map(s => `<div class="line2"><span style="font-size:14px;min-width:0"><span style="font-weight:500">${nm(s.rid)}</span>
         <span style="color:#8A9C9F"> got ${s.got.map(g => player(g.pid)).join(', ') || 'draft picks'}</span></span>
-        <span class="num ${sign(s.net)}" style="font-size:14px;white-space:nowrap">${signed(s.net)}</span></div>`).join('')}</div>`).join('')}</div>`));
+        <span class="num ${sign(s.net)}" style="font-size:14px;white-space:nowrap">${signed(s.net)}</span></div>`).join('')}</button>`).join('')}</div>`));
   }
 
   out.push(section(`<div class="head"><h2>Team MVPs</h2><span class="note">Most starter points for that team</span></div><div class="rows">
@@ -632,9 +729,9 @@ function viewCompare(a, b) {
   const between = M.allTrades.filter(t => t.sides.some(s => s.owner === a) && t.sides.some(s => s.owner === b));
   out.push(section(`<h2>Trades between them</h2>${between.length ? between.map(t => {
     const sa = t.sides.find(s => s.owner === a); const win = sa.net >= 0 ? a : b;
-    return `<div class="box"><div class="top-line"><span>${t.season} · Week ${t.week}</span><span>Winner</span></div>
+    return `<button type="button" class="box tradebtn"${tradeAttr(t)}><div class="top-line"><span>${t.season} · Week ${t.week}</span><span>Winner · tap for details</span></div>
       <div class="line2"><span style="font-size:14px;min-width:0">${name(a)} got ${sa.got.map(g => player(g.pid)).join(', ') || 'picks'} for ${sa.sent.map(g => player(g.pid)).join(', ') || 'picks'}</span>
-      <span class="num up" style="font-size:14px;white-space:nowrap">${name(win)} ${signed(Math.abs(sa.net))}</span></div></div>`;
+      <span class="num up" style="font-size:14px;white-space:nowrap">${name(win)} ${signed(Math.abs(sa.net))}</span></div></button>`;
   }).join('') : '<p class="lead">These two have never traded with each other.</p>'}`));
   return out.join('');
 }

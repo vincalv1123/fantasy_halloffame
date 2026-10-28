@@ -181,6 +181,25 @@ a.card:hover { background: var(--panel-2); }
 .preview a:hover { color: var(--fg); }
 details.round + details.round { margin-top: 8px; }
 
+/* Sortable tables */
+.table th .sort { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; min-height: 32px; font: inherit; letter-spacing: inherit; text-transform: inherit; color: var(--muted); }
+.table th .sort:hover, .table th .sort.on { color: var(--fg); }
+.table th .sort:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 4px; }
+.table th .arrow { font-size: 10px; opacity: .7; }
+.table.sortable td, .table.sortable th { white-space: nowrap; }
+
+/* Trade buttons and pop-up */
+.box.tradebtn { all: unset; box-sizing: border-box; display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; cursor: pointer; color: var(--fg); font-family: var(--font); width: 100%; text-align: left; }
+.box.tradebtn:hover { border-color: var(--line-strong); background: var(--panel); }
+.box.tradebtn:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.modal { border: 0; padding: 0; background: transparent; color: var(--fg); max-width: min(560px, calc(100vw - 32px)); width: 100%; max-height: calc(100dvh - 48px); }
+.modal::backdrop { background: rgba(4, 10, 12, 0.72); }
+.modal-card { background: var(--bg); border: 1px solid var(--line-strong); border-radius: 18px; padding: 18px 18px 20px; display: flex; flex-direction: column; gap: 16px; max-height: calc(100dvh - 48px); overflow-y: auto; box-sizing: border-box; }
+.modal .side { display: flex; flex-direction: column; gap: 6px; padding-top: 12px; border-top: 1px solid var(--line); }
+.modal .side .name { font-size: 16px; font-weight: 600; }
+.modal .close { flex: none; width: 40px; height: 40px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--panel); color: var(--fg); font-size: 15px; cursor: pointer; }
+.modal .close:hover { border-color: var(--fg-2); }
+
 /* Stat search */
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .search { display: flex; gap: 8px; margin-top: 6px; }

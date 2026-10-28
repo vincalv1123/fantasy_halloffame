@@ -125,7 +125,7 @@ function buildSeason(raw, players, isNewest, later, format) {
 
   // Standings, all-play and luck.
   const st = {};
-  rids.forEach(r => { st[r] = { rid: r, wins: 0, losses: 0, ties: 0, pf: 0, pa: 0, allPlay: 0, allPlayGames: 0, games: 0, streak: [] }; });
+  rids.forEach(r => { st[r] = { rid: r, wins: 0, losses: 0, ties: 0, pf: 0, pa: 0, maxPf: 0, allPlay: 0, allPlayGames: 0, games: 0, streak: [] }; });
   games.filter(g => !g.playoff).forEach(g => {
     const A = st[g.a]; const B = st[g.b];
     A.pf += g.ap; A.pa += g.bp; B.pf += g.bp; B.pa += g.ap; A.games++; B.games++;
@@ -184,6 +184,7 @@ function buildSeason(raw, players, isNewest, later, format) {
       const opt = optimalPoints(slots, m.players.filter(p => !taxi[r] || !taxi[r].has(p) || m.starters.indexOf(p) >= 0), m.players_points, posOf);
       eff[r].actual += actual;
       eff[r].optimal += Math.max(opt, actual);
+      if (w <= lastReg) st[r].maxPf += Math.max(opt, actual);
       const gap = Math.max(0, opt - actual);
       eff[r].benchLeft += gap;
       const game = games.find(g => g.week === w && (g.a === r || g.b === r));
@@ -266,6 +267,7 @@ function buildSeason(raw, players, isNewest, later, format) {
     });
     const list = Object.values(sides);
     list.forEach(s => { if (tradeNet[s.rid]) { tradeNet[s.rid].net += s.net; tradeNet[s.rid].count++; } });
+    (t.picks || []).forEach(d => { if (sides[d.to]) (sides[d.to].picks = sides[d.to].picks || []).push(d); });
     trades.push({ season: raw.season, week: t.leg, created: t.created, sides: list });
   });
   trades.sort((a, b) => a.created - b.created);
@@ -533,7 +535,7 @@ export function buildModel(data, format) {
   // Career totals per manager.
   const career = {};
   Object.keys(managers).forEach(id => {
-    career[id] = { id, wins: 0, losses: 0, ties: 0, pf: 0, pa: 0, games: 0, titles: 0, finals: 0, playoffs: 0, lastPlaces: 0,
+    career[id] = { id, wins: 0, losses: 0, ties: 0, pf: 0, pa: 0, maxPf: 0, allPlay: 0, allPlayGames: 0, games: 0, titles: 0, finals: 0, playoffs: 0, lastPlaces: 0,
       luck: 0, regPts: 0, regGames: 0, poPts: 0, poGames: 0, scoreWeighted: 0, scoreGames: 0,
       parts: { results: 0, startSit: 0, waivers: 0, trades: 0, draft: 0 }, draftGames: 0,
       tradeNet: 0, trades: 0, waiverPts: 0, benchLeft: 0, effActual: 0, effOptimal: 0, bySeason: [] };
@@ -544,6 +546,7 @@ export function buildModel(data, format) {
       const c = career[id];
       const s = S.st[r];
       c.wins += s.wins; c.losses += s.losses; c.ties += s.ties; c.pf += s.pf; c.pa += s.pa; c.games += s.games;
+      c.maxPf += s.maxPf; c.allPlay += s.allPlay; c.allPlayGames += s.allPlayGames;
       c.luck += s.luck; c.regPts += s.pf; c.regGames += s.games;
       if (S.champion === r) c.titles++;
       if (S.status === 'complete' && S.finalists.indexOf(r) >= 0) c.finals++;
@@ -569,6 +572,7 @@ export function buildModel(data, format) {
     ['results', 'startSit', 'waivers', 'trades'].forEach(k => { c.parts[k] = c.scoreGames ? c.parts[k] / c.scoreGames : 0; });
     c.parts.draft = c.draftGames ? c.parts.draft / c.draftGames : null;
     c.winPct = c.games ? (c.wins + c.ties / 2) / c.games : 0;
+    c.allPlayPct = c.allPlayGames ? c.allPlay / c.allPlayGames : 0;
     c.ppg = c.regGames ? c.regPts / c.regGames : 0;
     c.poPpg = c.poGames ? c.poPts / c.poGames : null;
     c.clutch = c.poPpg != null && c.ppg ? c.poPpg / c.ppg - 1 : null;

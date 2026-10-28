@@ -4,7 +4,7 @@
 
 
 const API = 'https://api.sleeper.app/v1';
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 
 async function get(path) {
   const res = await fetch(API + path);
@@ -107,7 +107,8 @@ async function loadSeason(league, state, isCurrent) {
     }))),
     transactions: [].concat.apply([], transactions).filter(t => t && t.status === 'complete').map(t => ({
       type: t.type, leg: t.leg, adds: t.adds || {}, drops: t.drops || {}, roster_ids: t.roster_ids || [],
-      bid: t.settings && t.settings.waiver_bid, created: t.created
+      bid: t.settings && t.settings.waiver_bid, created: t.created,
+      picks: (t.draft_picks || []).map(d => ({ season: d.season, round: d.round, from: d.previous_owner_id, to: d.owner_id, orig: d.roster_id }))
     }))
   };
 }
