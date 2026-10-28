@@ -107,7 +107,7 @@ function openTrade(i) {
     document.body.appendChild(dlg);
     dlg.addEventListener('click', e => { if (e.target === dlg || e.target.closest('[data-close]')) dlg.close(); });
   }
-  const pickLabel = d => `${d.season} round ${d.round} pick${S && d.orig !== d.to && S.ownerOf[d.orig] ? ` <span class="note">(originally ${name(S.ownerOf[d.orig])}'s)</span>` : ''}`;
+  const pickLabel = d => `${d.season} round ${d.round} pick${S && d.orig !== d.to && d.orig !== d.from && S.ownerOf[d.orig] ? ` <span class="note">(originally ${name(S.ownerOf[d.orig])}'s)</span>` : ''}`;
   dlg.innerHTML = `<div class="modal-card">
     <div class="line2" style="align-items:center"><h2 id="trade-title" style="font-size:18px">Trade · ${t.season} Week ${t.week}</h2>
       <button type="button" class="close" data-close aria-label="Close">✕</button></div>
