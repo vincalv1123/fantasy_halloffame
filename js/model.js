@@ -52,7 +52,8 @@ export function optimalPoints(slots, playerIds, pointsById, positionOf) {
   return total;
 }
 
-function buildSeason(raw, players, isNewest, later, format) {
+function buildSeason(raw, players, isNewest, later, format, opts) {
+  opts = opts || {};
   const S = {
     season: raw.season,
     leagueId: raw.leagueId,
@@ -312,11 +313,17 @@ function buildSeason(raw, players, isNewest, later, format) {
 
   // Draft: each pick's positional value against what picks around that slot produced this season.
   const picks = raw.picks.filter(p => p.player_id).map(p => ({ ...p, pts: playerPts[p.player_id] || 0, pos: posOf(p.player_id), vor: aboveRepl(p.player_id) }));
+  // Expected value at each pick comes from a smooth curve across all of the league's finished drafts
+  // of a similar size (see draftCurves); with no finished drafts yet, from picks within 6 spots in this draft.
+  const curve = opts.curves && opts.curves[raw.season];
   picks.forEach(p => {
-    const near = picks.filter(q => Math.abs(q.pick_no - p.pick_no) <= 6);
-    p.expected = mean(near.map(q => q.vor));
+    if (curve) p.expected = curve(p.pick_no);
+    else p.expected = mean(picks.filter(q => Math.abs(q.pick_no - p.pick_no) <= 6).map(q => q.vor));
     p.value = p.vor - p.expected;
   });
+  // Positional draft rank: the order each position came off the board (WR1 = first WR taken).
+  const posCount = {};
+  picks.slice().sort((a, b) => a.pick_no - b.pick_no).forEach(p => { posCount[p.pos] = (posCount[p.pos] || 0) + 1; p.posDrafted = posCount[p.pos]; });
   const draftVal = {};
   rids.forEach(r => { draftVal[r] = 0; });
   picks.forEach(p => { if (draftVal[p.roster_id] != null) draftVal[p.roster_id] += p.value; });
@@ -423,7 +430,7 @@ function buildSeason(raw, players, isNewest, later, format) {
   S.swap = swap;
 
   // Playoff odds for a season still being played.
-  if (S.isCurrent) S.odds = simulateOdds(S, raw, byWeek, st);
+  if (S.isCurrent && !opts.skipOdds) S.odds = simulateOdds(S, raw, byWeek, st);
 
   return S;
 }
@@ -514,10 +521,35 @@ function simulateOdds(S, raw, byWeek, st) {
   return { byRid: out, remainingWeeks: Math.max(0, lastReg - S.scoredThrough), bracketLive, byeCount };
 }
 
+// Expected positional value by overall pick number, smoothed across the league's finished drafts.
+// Only drafts of a similar size are pooled (a dynasty startup draft isn't compared with a rookie draft).
+// For a season still in progress, the curve is scaled down to the share of the regular season played.
+function draftCurves(seasons) {
+  const drafts = seasons.filter(S => S.picks.length);
+  const curves = {};
+  drafts.forEach(S => {
+    const peers = drafts.filter(D => !D.isCurrent && Math.abs(D.picks.length - S.picks.length) <= 0.25 * S.picks.length);
+    const pool = [].concat.apply([], peers.map(D => D.picks.map(p => ({ k: p.pick_no, v: p.vor }))));
+    if (pool.length < 40) return;
+    const full = Math.max(1, S.playoffWeekStart - 1);
+    const frac = S.isCurrent ? Math.max(1, S.regWeeks.length) / full : 1;
+    const memo = {};
+    curves[S.season] = k => {
+      if (memo[k] != null) return memo[k];
+      let ws = 0; let t = 0;
+      pool.forEach(q => { const d = Math.abs(q.k - k); if (d <= 8) { const w = 1 - d / 9; ws += w; t += w * q.v; } });
+      return (memo[k] = ws ? (t / ws) * frac : 0);
+    };
+  });
+  return curves;
+}
+
 export function buildModel(data, format) {
   const players = data.players;
   // data.seasons is newest first, so the seasons after season i are 0..i-1 (oldest first).
-  const seasons = data.seasons.map((raw, i) => buildSeason(raw, players, i === 0, data.seasons.slice(0, i).reverse(), format || 'redraft'));
+  const build = opts => data.seasons.map((raw, i) => buildSeason(raw, players, i === 0, data.seasons.slice(0, i).reverse(), format || 'redraft', opts));
+  // Two passes: the first works out every pick's positional value, which the slot curves are built from.
+  const seasons = build({ curves: draftCurves(build({ skipOdds: true })) });
   const managers = {};
   data.seasons.forEach(raw => {
     raw.rosters.forEach(r => {
