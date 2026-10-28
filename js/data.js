@@ -23,6 +23,14 @@ function cacheSet(key, value) {
   try { localStorage.setItem('hof:' + CACHE_VERSION + ':' + key, JSON.stringify(value)); } catch (e) { /* storage full or blocked */ }
 }
 
+// Refresh button: forget the saved copies of finished seasons so the next load pulls everything from Sleeper.
+// Player names are kept (they're ~5 MB and refresh daily on their own).
+export function clearSavedSeasons() {
+  try {
+    Object.keys(localStorage).filter(k => k.indexOf('hof:') === 0 && k.indexOf(':players') < 0).forEach(k => localStorage.removeItem(k));
+  } catch (e) { /* storage blocked */ }
+}
+
 // Player names and positions. The full list is ~5 MB, so keep a slim copy for a day.
 async function loadPlayers() {
   const cached = cacheGet('players');

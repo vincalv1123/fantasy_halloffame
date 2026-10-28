@@ -3,7 +3,7 @@
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
 import { CONFIG } from './config.js';
-import { loadAll, loadLiveWeek, lookupUser, nflState, userLeagues, leagueInfo } from './data.js';
+import { loadAll, loadLiveWeek, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js';
 import { buildModel } from './model.js';
 import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js';
 
@@ -1215,6 +1215,18 @@ function render() {
   if (key !== lastRoute) { window.scrollTo(0, 0); lastRoute = key; }
 }
 
+// ---------- refresh button ----------
+const $refresh = document.getElementById('refresh');
+function setRefresh(state) {
+  if (!$refresh) return;
+  const label = $refresh.querySelector('.refresh-label');
+  $refresh.hidden = false;
+  $refresh.disabled = state === 'busy';
+  $refresh.classList.toggle('spin', state === 'busy');
+  label.textContent = state === 'busy' ? 'Refreshing…' : state === 'error' ? 'Try again' : 'Refresh';
+  $refresh.title = state === 'done' ? 'Updated ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + ' · pull everything from Sleeper again' : 'Pull everything from Sleeper again';
+}
+
 async function start() {
   const leagueId = params.get('league');
   const username = params.get('u') || '';
@@ -1244,6 +1256,22 @@ async function start() {
     $leagues.innerHTML = `<span class="league-name">${esc(LG.name)}</span><a class="switch" href="./">Switch league</a>`;
     window.addEventListener('hashchange', render);
     render();
+    setRefresh('idle');
+    $refresh.addEventListener('click', async () => {
+      setRefresh('busy');
+      clearSavedSeasons();
+      const y = window.scrollY;
+      try {
+        const fresh = await loadAll(LG, () => {});
+        M = buildModel(fresh, LG.format);
+        M.px = PX;
+        M.league = LG;
+        document.getElementById('meta').textContent = describe(M, LG);
+        render();
+        window.scrollTo(0, y);
+        setRefresh('done');
+      } catch (err) { setRefresh('error'); }
+    });
   } catch (e) {
     $app.innerHTML = `<div class="wrap status err">Couldn't load that league from Sleeper. Check the link, or <a href="./">pick a league again</a>.<br><span class="note">${esc(e.message)}</span></div>`;
   }

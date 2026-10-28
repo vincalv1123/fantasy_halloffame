@@ -276,3 +276,13 @@ svg text { font-family: var(--mono); }
 .modal.wide { max-width: min(760px, calc(100vw - 32px)); }
 .grade.sm { width: 26px; height: 26px; font-size: 13px; border-radius: 7px; }
 .modal .table td, .modal .table th { white-space: nowrap; }
+
+/* Refresh button */
+.hdr-right { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.refresh { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line-strong); background: none; color: var(--fg-2); font-family: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.refresh:hover { color: var(--fg); border-color: var(--fg-2); }
+.refresh:disabled { opacity: 0.7; cursor: progress; }
+.refresh.spin svg { animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .refresh.spin svg { animation: none; } }
+@media (max-width: 420px) { .top .meta { display: none; } }
