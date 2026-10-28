@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js';
-import { loadAll, loadLiveWeek, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js';
-import { buildModel } from './model.js';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js';
+import { CONFIG } from './config.js?v=202610280500';
+import { loadAll, loadLiveWeek, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610280500';
+import { buildModel } from './model.js?v=202610280500';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610280500';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -1260,7 +1260,7 @@ async function start() {
     window.addEventListener('hashchange', render);
     render();
     setRefresh('idle');
-    $refresh.addEventListener('click', async () => {
+    if ($refresh) $refresh.addEventListener('click', async () => {
       setRefresh('busy');
       clearSavedSeasons();
       const y = window.scrollY;
