@@ -292,7 +292,52 @@ function powerChart(S, highlight) {
     <g stroke="#1F3237" stroke-width="1"><line x1="24" y1="${y(1)}" x2="340" y2="${y(1)}"/><line x1="24" y1="${y(mid)}" x2="340" y2="${y(mid)}"/><line x1="24" y1="${y(n)}" x2="340" y2="${y(n)}"/></g>
     <g fill="#8A9C9F" font-size="10"><text x="0" y="${y(1) + 3.5}">1</text><text x="0" y="${y(mid) + 3.5}">${mid}</text><text x="0" y="${y(n) + 3.5}">${n}</text>
     <text x="${x(0)}" y="224" text-anchor="middle">W1</text><text x="${x(midW - 1)}" y="224" text-anchor="middle">W${midW}</text><text x="340" y="224" text-anchor="end">W${weeks}</text></g>
-    ${base}${top}</svg></div>`;
+    ${base}${top}
+    <polyline id="phover" fill="none" stroke="#F1F4F3" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round" points="" pointer-events="none"/>
+    <g class="ppts">${S.rids.map(r => S.power[r].map((rk, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(rk).toFixed(1)}" r="5" data-rid="${r}" data-i="${i}" tabindex="-1"/>`).join('')).join('')}</g>
+    <circle id="pdot" r="4" fill="#F1F4F3" stroke="#0C171A" stroke-width="1.5" pointer-events="none" style="display:none"/>
+    </svg></div><div class="ptip" id="ptip" hidden></div>`;
+}
+
+// Hover (or tap) a point on the power rankings chart to see that team's week: rank, total PF, that week's score.
+function powerWeekData(S) {
+  if (S._powerData) return S._powerData;
+  const out = {};
+  S.rids.forEach(r => { let cum = 0; out[r] = S.regWeeks.map(w => { const p = S.byWeek[w][r] ? S.byWeek[w][r].points : 0; cum += p; return { w, p, cum }; }); });
+  S._powerData = out;
+  return out;
+}
+function bindPowerHover(S) {
+  const box = document.getElementById('power');
+  if (!box || box.dataset.hover) return;
+  box.dataset.hover = '1';
+  const data = powerWeekData(S);
+  const show = c => {
+    const svg = box.querySelector('svg'); const tip = document.getElementById('ptip');
+    if (!svg || !tip) return;
+    const r = Number(c.dataset.rid); const i = Number(c.dataset.i);
+    const d = data[r][i]; const rank = S.power[r][i];
+    const prev = i > 0 ? S.power[r][i - 1] : null;
+    const move = prev == null || prev === rank ? '' : prev > rank ? ` <span class="up">▲${prev - rank}</span>` : ` <span class="down">▼${rank - prev}</span>`;
+    tip.innerHTML = `<b>${name(S.ownerOf[r])}</b><span>Week ${d.w}</span><span>Rank <b class="num">${rank}</b>${move} · PF <b class="num">${comma(d.cum)}</b></span><span>Scored <b class="num">${f2(d.p)}</b> that week</span>`;
+    tip.hidden = false;
+    const pts = S.power[r].map((rk, k) => { const cc = svg.querySelector(`circle[data-rid="${r}"][data-i="${k}"]`); return cc.getAttribute('cx') + ',' + cc.getAttribute('cy'); }).join(' ');
+    svg.querySelector('#phover').setAttribute('points', pts);
+    const dot = svg.querySelector('#pdot'); dot.setAttribute('cx', c.getAttribute('cx')); dot.setAttribute('cy', c.getAttribute('cy')); dot.style.display = '';
+    const br = box.getBoundingClientRect(); const cr = c.getBoundingClientRect();
+    const left = Math.min(Math.max(cr.left - br.left + cr.width / 2 - tip.offsetWidth / 2, 0), br.width - tip.offsetWidth);
+    let top = cr.top - br.top - tip.offsetHeight - 10; if (top < 0) top = cr.bottom - br.top + 10;
+    tip.style.left = left + 'px'; tip.style.top = top + 'px';
+  };
+  const hide = () => {
+    const tip = document.getElementById('ptip'); if (tip) tip.hidden = true;
+    const svg = box.querySelector('svg'); if (!svg) return;
+    const h = svg.querySelector('#phover'); if (h) h.setAttribute('points', '');
+    const dot = svg.querySelector('#pdot'); if (dot) dot.style.display = 'none';
+  };
+  box.addEventListener('pointerover', e => { const c = e.target.closest('circle[data-rid]'); if (c) show(c); });
+  box.addEventListener('click', e => { const c = e.target.closest('circle[data-rid]'); if (c) show(c); else hide(); });
+  box.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') hide(); });
 }
 
 // Series history between this week's opponents (games before this week).
@@ -413,7 +458,7 @@ function viewSeason(S) {
     <div id="power" data-season="${S.season}">${powerChart(S, defaultHL)}</div>
     <div class="legend" id="power-legend">${S.standings.map(s => `<button type="button" data-rid="${s.rid}" aria-pressed="${defaultHL.indexOf(s.rid) >= 0}">
       <i style="background:${defaultHL.indexOf(s.rid) >= 0 ? HL[defaultHL.indexOf(s.rid)] : '#3B5258'}"></i>${nm(s.rid)}</button>`).join('')}</div>
-    <span class="note">Tap names to highlight up to five teams.</span>`));
+    <span class="note">Hover or tap a point to see that week's rank, total PF and score. Tap names to highlight up to five teams.</span>`));
 
   const ranked = S.rids.slice().sort((a, b) => S.scores[b].total - S.scores[a].total);
   const best = ranked[0]; const worst = ranked[ranked.length - 1];
@@ -451,6 +496,7 @@ function viewSeason(S) {
 }
 
 function bindPowerLegend(S, initial) {
+  bindPowerHover(S);
   const legend = document.getElementById('power-legend');
   if (!legend) return;
   let hl = initial.slice();
@@ -461,6 +507,7 @@ function bindPowerLegend(S, initial) {
     const i = hl.indexOf(rid);
     if (i >= 0) hl.splice(i, 1); else { if (hl.length >= HL.length) hl.shift(); hl.push(rid); }
     document.getElementById('power').innerHTML = powerChart(S, hl);
+    bindPowerHover(S);
     legend.querySelectorAll('button').forEach(b => {
       const r = Number(b.dataset.rid); const k = hl.indexOf(r);
       b.setAttribute('aria-pressed', String(k >= 0));

@@ -258,3 +258,10 @@ svg text { font-family: var(--mono); }
   body.start .content .wrap { max-width: 720px; padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); }
   .content .wrap { max-width: 900px; padding-left: 40px; padding-right: 40px; }
 }
+
+/* Power rankings hover */
+#power { position: relative; }
+#power .ppts circle { fill: transparent; cursor: pointer; }
+.ptip { position: absolute; z-index: 5; pointer-events: none; display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: 10px; background: var(--paper); color: var(--ink); font-size: 12px; line-height: 1.35; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35); white-space: nowrap; }
+.ptip b { font-weight: 600; }
+.ptip .up { color: #1E7F55; } .ptip .down { color: #B5452E; }
