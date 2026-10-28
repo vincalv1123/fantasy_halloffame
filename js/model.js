@@ -324,6 +324,11 @@ function buildSeason(raw, players, isNewest, later, format, opts) {
   // averaging zero, so a strong or weak season overall doesn't push every team up or down.
   const offset = curve ? mean(picks.map(p => p.vor - p.expected)) : 0;
   picks.forEach(p => { p.expected += offset; p.value = p.vor - p.expected; });
+  // Misses hurt more early and less late: a below-slot pick counts 1.5x in round 1, sliding to 0.4x
+  // in the last round. Hits count in full. rawValue keeps the unweighted number.
+  const lastRound = picks.reduce((m, p) => Math.max(m, p.round || 1), 1);
+  S.missWeight = rd => (lastRound <= 1 ? 1 : 1.5 - 1.1 * ((rd || 1) - 1) / (lastRound - 1));
+  picks.forEach(p => { p.rawValue = p.value; if (p.value < 0) p.value *= S.missWeight(p.round); });
   // Positional draft rank: the order each position came off the board (WR1 = first WR taken).
   const posCount = {};
   picks.slice().sort((a, b) => a.pick_no - b.pick_no).forEach(p => { posCount[p.pos] = (posCount[p.pos] || 0) + 1; p.posDrafted = posCount[p.pos]; });
