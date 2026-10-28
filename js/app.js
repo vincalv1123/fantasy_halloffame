@@ -476,6 +476,8 @@ function viewSeason(S) {
   out.push(section(`<h2>Season awards</h2><div class="tiles">${aw.map(a => `<div class="tile"><span class="k ${a.cls}">${a.k}</span>
     <span style="font-size:15px;font-weight:600">${a.who}</span><span class="num" style="font-size:15px">${a.v}</span><span class="d">${a.d}</span></div>`).join('')}</div>`));
 
+  if (S.picks.length && LG.format !== 'dynasty') out.push(section(teamGradesSection(S, draftTeamGrades(S), S.season + ' draft grades') + `<a class="btn" href="${PX}drafts@${S.season}">Full ${S.season} draft →</a>`));
+
   if (S.trades.length) {
     out.push(section(`<div class="head"><h2>Trades</h2><span class="note">${S.trades.length} trade${S.trades.length > 1 ? 's' : ''} · ${LG.format === 'dynasty' ? 'starter pts since, all seasons' : 'starter pts for the rest of the season'}</span></div>
       <div style="display:flex;flex-direction:column;gap:10px">${S.trades.slice().reverse().map(t => `<button type="button" class="box tradebtn"${tradeAttr(t)}><div class="top-line"><span>Week ${t.week}</span><span>Tap for details</span></div>
@@ -891,6 +893,30 @@ function viewPlayoffs() {
 const GRADE_COLORS = { A: '#5FC79B', B: '#9FD8B8', C: '#C9D3D2', D: '#F2B59E', F: '#F0907A' };
 function gradeOf(z) { return z >= 1 ? 'A' : z >= 0.33 ? 'B' : z >= -0.33 ? 'C' : z >= -1 ? 'D' : 'F'; }
 
+// Team draft grades: total value of each team's picks, scored against the other teams (A–F).
+function draftTeamGrades(S) {
+  const teams = S.rids.map(r => {
+    const picks = S.picks.filter(p => p.roster_id === r);
+    const total = picks.reduce((t, p) => t + p.value, 0);
+    const best = picks.slice().sort((a, b) => b.value - a.value)[0];
+    return { r, picks, total, best };
+  });
+  const xs = teams.map(t => t.total); const m = xs.reduce((a, b) => a + b, 0) / xs.length;
+  const sdv = Math.sqrt(xs.reduce((a, b) => a + (b - m) * (b - m), 0) / Math.max(1, xs.length - 1)) || 1;
+  teams.forEach(t => { t.grade = gradeOf((t.total - m) / sdv); });
+  return teams.sort((a, b) => b.total - a.total);
+}
+function teamGradesSection(S, teams, title) {
+  const nm = r => name(S.ownerOf[r]);
+  return `<div class="head"><h2>${title || 'Team grades'}</h2><span class="note">Positional value vs. what each pick number usually produces${S.isCurrent ? ', so far' : ''}</span></div>
+    <div class="rows">${teams.map(t => `<button type="button" class="row rowbtn" data-draft-team="${S.season}:${t.r}" style="grid-template-columns:40px minmax(0,1fr) auto">
+      <span class="grade" style="background:${GRADE_COLORS[t.grade]}">${t.grade}</span>
+      <span class="stack"><span class="name" style="font-size:15px">${nm(t.r)}</span><span class="sub">${t.best ? 'Best pick: ' + player(t.best.player_id) + ' (R' + t.best.round + ')' : 'No picks'}</span></span>
+      <span class="num ${sign(t.total)}" style="font-size:15px">${signed(t.total, 0)}</span></button>`).join('')}</div>
+    <span class="note">Tap a team to see its whole draft with a grade for every pick.</span>
+    <span class="note">Each pick is worth its points above a replacement-level starter at its position (${Object.entries(S.replacement).map(([p, x]) => p + x.rank).join(', ')}), compared with what that pick number usually produces across this league's drafts. A late QB who scores a lot but barely beats the replacement QB isn't rated above a late RB who became a starter. Misses count more in early rounds (1.5× in round 1) and less in late ones (0.4× in the last); hits count in full. Grades compare each team's total with the rest of the league: A is a standout draft, C is about average, F is far below.</span>`;
+}
+
 function viewDrafts(seasonSel) {
   const withPicks = M.seasons.filter(S => S.picks.length);
   if (!withPicks.length) return section('<h1>No drafts on record.</h1>', 'hero');
@@ -902,30 +928,14 @@ function viewDrafts(seasonSel) {
   const sincePts = pid => later.reduce((t, x) => t + (x.playerPts[pid] || 0), 0);
   const showGrades = LG.format !== 'dynasty';
 
-  // Team grades: total value of a team's picks, scored against the other teams.
-  const teams = S.rids.map(r => {
-    const picks = S.picks.filter(p => p.roster_id === r);
-    const total = picks.reduce((t, p) => t + p.value, 0);
-    const best = picks.slice().sort((a, b) => b.value - a.value)[0];
-    return { r, picks, total, best };
-  });
-  const xs = teams.map(t => t.total); const m = xs.reduce((a, b) => a + b, 0) / xs.length;
-  const sdv = Math.sqrt(xs.reduce((a, b) => a + (b - m) * (b - m), 0) / Math.max(1, xs.length - 1)) || 1;
-  teams.forEach(t => { t.grade = gradeOf((t.total - m) / sdv); });
-  teams.sort((a, b) => b.total - a.total);
+  const teams = draftTeamGrades(S);
 
   const out = [];
   out.push(section(`<div class="eyebrow">Draft history${S.isCurrent ? ' · season in progress' : ''}</div>
     <h1>${S.season} draft. <span class="soft">${showGrades ? nm(teams[0].r) + ' drafted best, ' + nm(teams[teams.length - 1].r) + ' worst.' : 'Every pick, round by round.'}</span></h1>
     <nav class="chips" aria-label="Choose a draft">${withPicks.map(x => `<a class="pill${x === S ? ' on' : ''}" href="${PX}drafts@${x.season}">${x.season}</a>`).join('')}</nav>`, 'hero'));
 
-  if (showGrades) out.push(section(`<div class="head"><h2>Team grades</h2><span class="note">Positional value vs. what each pick number usually produces${S.isCurrent ? ', so far' : ''}</span></div>
-    <div class="rows">${teams.map(t => `<button type="button" class="row rowbtn" data-draft-team="${S.season}:${t.r}" style="grid-template-columns:40px minmax(0,1fr) auto">
-      <span class="grade" style="background:${GRADE_COLORS[t.grade]}">${t.grade}</span>
-      <span class="stack"><span class="name" style="font-size:15px">${nm(t.r)}</span><span class="sub">${t.best ? 'Best pick: ' + player(t.best.player_id) + ' (R' + t.best.round + ')' : 'No picks'}</span></span>
-      <span class="num ${sign(t.total)}" style="font-size:15px">${signed(t.total, 0)}</span></button>`).join('')}</div>
-    <span class="note">Tap a team to see its whole draft with a grade for every pick.</span>
-    <span class="note">Each pick is worth its points above a replacement-level starter at its position (${Object.entries(S.replacement).map(([p, x]) => p + x.rank).join(', ')}), compared with what that pick number usually produces across this league's drafts. A late QB who scores a lot but barely beats the replacement QB isn't rated above a late RB who became a starter. Misses count more in early rounds (1.5× in round 1) and less in late ones (0.4× in the last); hits count in full. Grades compare each team's total with the rest of the league: A is a standout draft, C is about average, F is far below.</span>`));
+  if (showGrades) out.push(section(teamGradesSection(S, teams)));
 
   if (!showGrades) out.push(section(`<h2>Team drafts</h2><div class="chips">${teams.slice().sort((a, b) => M.nameOf(S.ownerOf[a.r]).localeCompare(M.nameOf(S.ownerOf[b.r]))).map(t =>
     `<button type="button" class="chip ex" data-draft-team="${S.season}:${t.r}">${nm(t.r)}</button>`).join('')}</div><span class="note">Tap a team to see its whole draft.</span>`));
