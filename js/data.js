@@ -185,3 +185,21 @@ export async function leagueInfo(id) {
   if (!l) return null;
   return { id: l.league_id, name: l.name, season: l.season, format: l.settings && l.settings.type === 2 ? 'dynasty' : l.settings && l.settings.type === 1 ? 'keeper' : 'redraft' };
 }
+
+// One week of player stats (box-score numbers) for the matchup pop-up. Finished weeks are kept in memory.
+const STAT_KEYS = ['pass_cmp', 'pass_att', 'pass_yd', 'pass_td', 'pass_int', 'rush_att', 'rush_yd', 'rush_td', 'rec', 'rec_tgt', 'rec_yd', 'rec_td', 'fum_lost',
+  'fgm', 'fga', 'fgm_lng', 'xpm', 'xpa', 'sack', 'int', 'fum_rec', 'def_td', 'safe', 'pts_allow'];
+const statCache = {};
+export async function loadWeekStats(season, week, live) {
+  const key = season + ':' + week;
+  if (!live && statCache[key]) return statCache[key];
+  const all = await get('/stats/nfl/regular/' + season + '/' + week);
+  const slim = {};
+  Object.keys(all || {}).forEach(id => {
+    const x = all[id]; const o = {}; let any = false;
+    STAT_KEYS.forEach(k => { if (x[k] != null) { o[k] = x[k]; any = true; } });
+    if (any) slim[id] = o;
+  });
+  statCache[key] = slim;
+  return slim;
+}

@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610290451';
-import { loadAll, loadLiveWeek, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610290451';
-import { buildModel, optimalPoints } from './model.js?v=202610290451';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610290451';
+import { CONFIG } from './config.js?v=202610290518';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610290518';
+import { buildModel, optimalPoints } from './model.js?v=202610290518';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610290518';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -371,7 +371,8 @@ function liveGames(S, week, list) {
     return `<div class="box"><div class="top-line"><span>Week ${week}</span><span>${final ? 'Final' : 'Live'}</span></div><div class="game">
       <a class="${aLead ? 'lead-t' : 'trail-t'}" href="${mlink(S.ownerOf[a.roster_id])}" style="text-decoration:none">${name(S.ownerOf[a.roster_id])}</a><span class="score">${f2(a.points || 0)}</span>
       <a class="${aLead ? 'trail-t' : 'lead-t'}" href="${mlink(S.ownerOf[b.roster_id])}" style="text-decoration:none">${name(S.ownerOf[b.roster_id])}</a><span class="score">${f2(b.points || 0)}</span></div>
-      ${matchupPreview(S, a.roster_id, b.roster_id, week)}</div>`;
+      ${matchupPreview(S, a.roster_id, b.roster_id, week)}
+      <button type="button" class="linkbtn" data-matchup="${S.season}:${week}:${a.matchup_id}" style="margin-top:8px">Lineups and player stats →</button></div>`;
   }).join('');
 }
 
@@ -524,6 +525,8 @@ function startLive(S, week) {
   liveTimer = setInterval(async () => {
     try {
       const list = await loadLiveWeek(S.leagueId, week);
+      S.byWeek[week] = S.byWeek[week] || {};
+      list.forEach(m => { S.byWeek[week][m.roster_id] = { roster_id: m.roster_id, matchup_id: m.matchup_id, points: m.points || 0, starters: m.starters || [], players: m.players || [], players_points: m.players_points || {} }; });
       const el = document.getElementById('live-games');
       if (!el) return stopLive();
       el.innerHTML = liveGames(S, week, list);
@@ -963,6 +966,30 @@ function viewMatchups(seasonSel) {
   return out.join('');
 }
 
+// One-line box score from Sleeper's weekly stats.
+function statLine(pos, s) {
+  if (!s) return '';
+  const n = k => Math.round((s[k] || 0) * 10) / 10;
+  const td = k => (n(k) ? ', ' + n(k) + ' TD' : '');
+  const parts = [];
+  if (n('pass_att')) parts.push(n('pass_cmp') + '/' + n('pass_att') + ', ' + n('pass_yd') + ' pass yd' + td('pass_td') + (n('pass_int') ? ', ' + n('pass_int') + ' INT' : ''));
+  if (n('rush_att')) parts.push(n('rush_att') + ' car, ' + n('rush_yd') + ' yd' + td('rush_td'));
+  if (n('rec') || n('rec_tgt')) parts.push(n('rec') + '/' + (n('rec_tgt') || n('rec')) + ' rec, ' + n('rec_yd') + ' yd' + td('rec_td'));
+  if (n('fga') || n('xpa')) parts.push('FG ' + n('fgm') + '/' + n('fga') + (n('fgm_lng') ? ' (long ' + n('fgm_lng') + ')' : '') + ', XP ' + n('xpm') + '/' + n('xpa'));
+  if (pos === 'DEF' && (s.pts_allow != null || n('sack'))) {
+    const d = [];
+    if (n('sack')) d.push(n('sack') + ' sack' + (n('sack') === 1 ? '' : 's'));
+    if (n('int')) d.push(n('int') + ' INT');
+    if (n('fum_rec')) d.push(n('fum_rec') + ' FR');
+    if (n('def_td')) d.push(n('def_td') + ' TD');
+    if (n('safe')) d.push(n('safe') + ' safety');
+    if (s.pts_allow != null) d.push(n('pts_allow') + ' pts allowed');
+    parts.push(d.join(', '));
+  }
+  if (n('fum_lost')) parts.push(n('fum_lost') + ' fum lost');
+  return parts.join(' · ');
+}
+
 function openMatchup(key) {
   const [season, wk, mid] = key.split(':');
   const S = seasonOf(season); const w = Number(wk);
@@ -978,8 +1005,8 @@ function openMatchup(key) {
   const best = (m, r) => { const pool = m.players.filter(p => !taxiOf(r).has(p) || m.starters.indexOf(p) >= 0);
     return Math.max(optimalPoints(S.startSlots || S.slots, pool, m.players_points, S.posOf), sum(m.starters.map(p => pts(m, p)))); };
   const slots = S.startSlots || S.slots;
-  const cellL = (m, p) => !p || p === '0' ? '<span class="pl note">Empty</span>' : `<span class="pl"><span class="pn">${player(p)}</span><span class="note">${esc(M.playerPos(p) || '')}</span></span>`;
-  const cellR = (m, p) => !p || p === '0' ? '<span class="pl r note">Empty</span>' : `<span class="pl r"><span class="pn">${player(p)}</span><span class="note">${esc(M.playerPos(p) || '')}</span></span>`;
+  const cellL = (m, p) => !p || p === '0' ? '<span class="pl note">Empty</span>' : `<span class="pl"><span class="pn">${player(p)}</span><span class="note">${esc(M.playerPos(p) || '')}</span><span class="sl" data-sl="${esc(p)}"></span></span>`;
+  const cellR = (m, p) => !p || p === '0' ? '<span class="pl r note">Empty</span>' : `<span class="pl r"><span class="pn">${player(p)}</span><span class="note">${esc(M.playerPos(p) || '')}</span><span class="sl" data-sl="${esc(p)}"></span></span>`;
   const ptsCell = (m, p, r) => `<span class="num${r ? ' r' : ''}">${p && p !== '0' ? f2(pts(m, p)) : '—'}</span>`;
   const n = Math.max(A.starters.length, B.starters.length, slots.length);
   let rowsHtml = '';
@@ -1020,8 +1047,19 @@ function openMatchup(key) {
       ${benchHtml}</div>
     <p class="note" style="margin:0">Highlighted points won that lineup slot. Best possible = the highest score that week's roster could have started${S.taxi ? ' (taxi players left out)' : ''}.${S.taxi ? ' Sleeper only saves the latest taxi squads, so older weeks use ' + (S.isCurrent ? 'the current ones' : 'the end-of-season ones') + '.' : ''}</p>
   </div>`;
+  dlg.dataset.key = key;
   if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
   const c = dlg.querySelector('.close'); if (c) c.focus();
+  // Player stat lines load after the pop-up opens (one request per week; the live week is always re-pulled).
+  const ptsOf = pid => (A.players_points[pid] != null ? A.players_points[pid] : B.players_points[pid]) || 0;
+  dlg.querySelectorAll('[data-sl]').forEach(el => { el.textContent = '…'; });
+  loadWeekStats(S.season, w, S.isCurrent && w > S.scoredThrough).then(stats => {
+    if (!dlg.open || dlg.dataset.key !== key) return;
+    dlg.querySelectorAll('[data-sl]').forEach(el => {
+      const pid = el.dataset.sl;
+      el.textContent = statLine(M.playerPos(pid), stats[pid]) || (ptsOf(pid) ? '' : S.isCurrent && w > S.scoredThrough ? 'Yet to play' : 'Did not play');
+    });
+  }).catch(() => { dlg.querySelectorAll('[data-sl]').forEach(el => { el.textContent = ''; }); });
 }
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-matchup]');

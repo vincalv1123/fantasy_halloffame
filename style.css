@@ -315,3 +315,6 @@ svg text { font-family: var(--mono); }
   .modal.trade { max-width: min(820px, calc(100vw - 48px)); }
   .tsides { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; }
 }
+
+.mrow .sl { font-size: 11px; line-height: 1.3; color: var(--muted); white-space: normal; }
+.mrow .sl:empty { display: none; }
