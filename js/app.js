@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610291818';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610291818';
-import { buildModel, optimalPoints } from './model.js?v=202610291818';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610291818';
+import { CONFIG } from './config.js?v=202610291821';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610291821';
+import { buildModel, optimalPoints } from './model.js?v=202610291821';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610291821';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -415,7 +415,7 @@ function seasonAwards(S) {
   }
   const lastR = S.lastPlace != null ? S.st[S.lastPlace] : S.standings[S.standings.length - 1];
   aw.push({ key: 'sacko', k: S.isCurrent ? 'Sacko watch' : 'Sacko', rid: lastR.rid, v: wl(lastR.wins, lastR.losses, lastR.ties),
-    d: (S.isCurrent ? 'Worst record so far · ' : S.toiletBowl ? 'Lost the toilet bowl · ' : 'Last place · ') + comma(lastR.pf) + ' PF', cls: 'bad-t', good: false });
+    d: (S.isCurrent ? 'Worst record so far · ' : S.toiletBowl ? 'Lost the toilet bowl · ' : 'Last place · ') + comma(lastR.pf) + ' PF', cls: 'sacko-t2', good: false });
   return aw;
 }
 
@@ -648,8 +648,8 @@ function breakdown(title, parts) {
 }
 
 // Awards a manager won in one season, and across a career.
-// Major awards (champion, regular-season champ, best manager) are gold; other good awards green; bad ones brown.
-const awardColor = a => (a.major ? GOLD : a.good ? '#5FC79B' : '#B4855E');
+// Major awards (champion, regular-season champ, best manager) are gold; other good awards green; bad ones red; the Sacko brown (it still counts as bad).
+const awardColor = a => (a.key === 'sacko' ? '#B4855E' : a.major ? GOLD : a.good ? '#5FC79B' : '#F0907A');
 const awardTier = a => (a.major ? 2 : a.good ? 1 : 0);
 function awardRow(a, sub) {
   return `<div class="row" style="grid-template-columns:22px minmax(0,1fr) auto;padding:12px 0">
@@ -1302,7 +1302,7 @@ function viewAwards() {
   bySeason.forEach(({ list }) => list.forEach(a => { seen[a.key] = seen[a.key] || a.k.replace(' watch', ''); }));
   const awardBlock = key => {
     const entries = bySeason.map(({ S, list }) => ({ S, a: list.find(x => x.key === key) })).filter(x => x.a);
-    const tier = entries[0].a.major ? 'major' : entries[0].a.good ? 'good' : 'bad';
+    const tier = key === 'sacko' ? 'sacko' : entries[0].a.major ? 'major' : entries[0].a.good ? 'good' : 'bad';
     return `<details class="calc aw-${tier}"${key === 'champion' || key === 'sacko' ? ' open' : ''}><summary><span style="display:flex;align-items:center;gap:8px"><span class="dot"></span>${esc(seen[key])}</span></summary>
       <div class="calc-body" style="padding-top:4px"><div class="rows">${entries.map(({ S, a }) => `<a class="row" href="${mlink(S.ownerOf[a.rid])}@${S.season}" style="grid-template-columns:52px minmax(0,1fr) auto">
         <span class="year">${S.season}</span><span class="stack"><span class="name" style="font-size:14px">${name(S.ownerOf[a.rid])}${S.isCurrent ? ' <span class="note">so far</span>' : ''}</span><span class="sub">${a.d}</span></span>
