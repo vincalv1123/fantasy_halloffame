@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610290525';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610290525';
-import { buildModel, optimalPoints } from './model.js?v=202610290525';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610290525';
+import { CONFIG } from './config.js?v=202610290530';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610290530';
+import { buildModel, optimalPoints } from './model.js?v=202610290530';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610290530';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -132,7 +132,7 @@ document.addEventListener('click', e => {
 
 // ---------- tabs ----------
 function renderTabs(route) {
-  const items = [`<a class="pill${route.view === 'all' ? ' on' : ''}" href="${PX}all">All-Time</a>`, `<a class="pill${route.view === 'playoffs' ? ' on' : ''}" href="${PX}playoffs">Playoffs</a>`, `<a class="pill${route.view === 'search' ? ' on' : ''}" href="${PX}search">${SEARCH_ICON} Stat search</a>`,
+  const items = [`<a class="pill${route.view === 'all' ? ' on' : ''}" href="${PX}all">All-Time</a>`, `<a class="pill${route.view === 'playoffs' ? ' on' : ''}" href="${PX}playoffs">Playoffs</a>`, `<a class="pill${route.view === 'search' ? ' on' : ''}" href="${PX}search">${SEARCH_ICON} Stat search</a>`, `<a class="pill${route.view === 'compare' ? ' on' : ''}" href="${PX}vs">Head to head</a>`,
     `<a class="pill${route.view === 'drafts' ? ' on' : ''}" href="${PX}drafts">Drafts</a>`, `<a class="pill${route.view === 'awards' ? ' on' : ''}" href="${PX}awards">Awards</a>`, `<a class="pill${route.view === 'matchups' ? ' on' : ''}" href="${PX}matchups">Matchup history</a>`]
     .concat(['<span class="tabs-label" aria-hidden="true">Seasons</span>'])
     .concat(M.seasons.map(s => `<a class="pill${route.view === 'season' && route.season === s.season ? ' on' : ''}" href="${PX}s${s.season}">${s.isCurrent ? '<span class="dot"></span>' : ''}${s.season}</a>`));
@@ -772,12 +772,13 @@ function viewCompare(a, b) {
   const meetings = r.list.slice().sort((p, q) => Number(q.season) - Number(p.season) || q.week - p.week).map(m => {
     const S = seasonOf(m.season);
     const g = S ? weekGames(S, m.week).find(x => (S.ownerOf[x.a] === a && S.ownerOf[x.b] === b) || (S.ownerOf[x.a] === b && S.ownerOf[x.b] === a)) : null;
-    const href = PX + 'matchups@' + m.season + '@' + m.week + (g ? '@' + g.mid : '');
     const aw = m.mine > m.theirs; const bw = m.theirs > m.mine;
-    return `<a class="row meet" href="${href}"><span class="year">${m.season}</span><span class="note">Week ${m.week}</span>
-      <span class="num${aw ? ' win' : ''}">${f2(m.mine)}</span><span class="num${bw ? ' win' : ''}">${f2(m.theirs)}</span></a>`;
+    const cells = `<span class="year">${m.season}</span><span class="note">Week ${m.week}</span>
+      <span class="num${aw ? ' win' : ''}">${f2(m.mine)}</span><span class="num${bw ? ' win' : ''}">${f2(m.theirs)}</span>`;
+    return g ? `<button type="button" class="row meet rowbtn" data-matchup="${m.season}:${m.week}:${g.mid}">${cells}</button>`
+      : `<a class="row meet" href="${PX}matchups@${m.season}@${m.week}">${cells}</a>`;
   });
-  out.push(section(`<div class="head"><h2>All meetings</h2><span class="note">${r.games} game${r.games === 1 ? '' : 's'} · tap one to open it in Matchup history</span></div>
+  out.push(section(`<div class="head"><h2>All meetings</h2><span class="note">${r.games} game${r.games === 1 ? '' : 's'} · tap one for lineups and stats</span></div>
     ${meetings.length ? `<div class="rows"><div class="row meet head-row"><span>Year</span><span>Week</span><span>${name(a)}</span><span>${name(b)}</span></div>${meetings.join('')}</div>` : '<p class="lead">These two have never played each other.</p>'}`));
 
   const keys = [['Overall', A.score, B.score], ['Results', A.parts.results, B.parts.results], ['Start/sit', A.parts.startSit, B.parts.startSit],
@@ -1056,6 +1057,7 @@ function openMatchup(key) {
     <div class="mhead">${head(A, g.a)}${head(B, g.b, 1)}</div>
     <div class="mtable"><span class="note mlabel">Starters</span>${rowsHtml}
       ${benchHtml}</div>
+    ${location.hash.indexOf(PX + 'matchups') === 0 ? '' : `<a class="btn" href="${PX}matchups@${S.season}@${w}@${g.mid}" data-close style="align-self:flex-start">Open in Matchup history →</a>`}
     <p class="note" style="margin:0">Highlighted points won that lineup slot. Best possible = the highest score that week's roster could have started${S.taxi ? ' (taxi players left out)' : ''}.${S.taxi ? ' Sleeper only saves the latest taxi squads, so older weeks use ' + (S.isCurrent ? 'the current ones' : 'the end-of-season ones') + '.' : ''}</p>
   </div>`;
   dlg.dataset.key = key;
@@ -1366,6 +1368,7 @@ function parse(h) {
   if (h === 'matchups' || h.indexOf('matchups@') === 0) { const p = h.split('@'); return { view: 'matchups', season: p[1] || null, week: p[2] ? Number(p[2]) : null, mid: p[3] ? Number(p[3]) : null }; }
   if (h === 'playoffs') return { view: 'playoffs' };
   if (h === 'drafts' || h.indexOf('drafts@') === 0) return { view: 'drafts', season: h.split('@')[1] || null };
+  if (h === 'vs') return { view: 'compare', a: null, b: null };
   if (h.indexOf('vs-') === 0) { const p = h.slice(3).split('~'); return { view: 'compare', a: p[0], b: p[1] }; }
   return { view: 'all' };
 }
@@ -1407,12 +1410,12 @@ function render() {
   } else if (route.view === 'matchups') {
     $app.innerHTML = viewMatchups(route.season, route.week);
     if (route.week) setTimeout(() => {
-      // Arrived from a head-to-head meeting: open that week, point at the game and show its lineups.
+      // Arrived from a matchup pop-up: open that week and point at the game.
       const sel = route.mid ? `[data-matchup="${route.season}:${route.week}:${route.mid}"]` : `details[data-week="${route.week}"]`;
       const el = document.querySelector(sel);
       if (!el) return;
       el.scrollIntoView({ block: 'center' });
-      if (route.mid) { el.classList.add('flash'); openMatchup(el.dataset.matchup); }
+      if (route.mid) el.classList.add('flash');
     }, 0);
     document.title = 'Matchup history' + suffix;
   } else if (route.view === 'awards') {
