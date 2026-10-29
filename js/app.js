@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610290537';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610290537';
-import { buildModel, optimalPoints } from './model.js?v=202610290537';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610290537';
+import { CONFIG } from './config.js?v=202610291552';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610291552';
+import { buildModel, optimalPoints } from './model.js?v=202610291552';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610291552';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -187,12 +187,12 @@ function viewAll() {
     <div class="rows">${lb.map((c, i) => {
       const best = i === 0; const worst = i === lb.length - 1 && lb.length > 1;
       const color = best ? GOLD : worst ? '#F0907A' : '#7E9093';
-      return `<a class="row r-score" href="${mlink(c.id)}"><span class="num" style="font-size:13px;color:${best ? GOLD : '#8A9C9F'}">${i + 1}</span>
-        <span class="stack" style="gap:7px"><span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="name">${name(c.id)}</span>
+      return `<details class="sdd"><summary class="row r-score"><span class="num" style="font-size:13px;color:${best ? GOLD : '#8A9C9F'}">${i + 1}</span>
+        <span class="stack" style="gap:7px"><span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><a class="name" href="${mlink(c.id)}">${name(c.id)}</a>
         ${best ? '<span class="tag gold">Best manager</span>' : ''}${worst ? '<span class="tag down">Worst manager</span>' : ''}</span>
         <span class="bar"><i style="width:${c.score}%;background:${color}"></i></span></span>
-        <span class="val">${Math.round(c.score)}</span></a>`;
-    }).join('')}</div><span class="note">Tap a manager to see how the score breaks down.</span>`));
+        <span class="val">${Math.round(c.score)}</span></summary>${scoreParts(careerPartRows(c), mlink(c.id), 'Career')}</details>`;
+    }).join('')}</div><span class="note">Tap a row for the score's parts. Tap a name for the manager's profile.</span>`));
 
   if (M.records.length) {
     out.push(section(`<h2>Single-game records</h2><div class="tiles">${M.records.map(r => `
@@ -264,11 +264,11 @@ function viewAll() {
       if (!r.games) return '<td style="background:#13252A;color:#4A6168">·</td>';
       const d = r.w - r.l; const al = Math.min(0.6, 0.14 + Math.abs(d) * 0.14);
       const bg = d > 0 ? `rgba(95,199,155,${al})` : d < 0 ? `rgba(240,144,122,${al})` : '#1A2F34';
-      return `<td style="background:${bg}" title="${name(a)} vs ${name(b)}: ${wl(r.w, r.l, r.t)}">${wl(r.w, r.l, r.t)}</td>`;
+      return `<td style="background:${bg}"><a class="h2hlink" href="${PX}vs-${encodeURIComponent(a)}~${encodeURIComponent(b)}" title="${name(a)} vs ${name(b)}: ${wl(r.w, r.l, r.t)}">${wl(r.w, r.l, r.t)}</a></td>`;
     }).join('') + '</tr>').join('');
     out.push(section(`<div class="head"><h2>Head-to-head</h2><span class="note">Row's record vs. column</span></div>
       <div class="scroll"><table class="h2h"><thead>${head}</thead><tbody>${body}</tbody></table></div>
-      <span class="note">Green = the row's manager owns that matchup. Includes playoff games.</span>
+      <span class="note">Green = the row's manager owns that matchup. Includes playoff games. Tap a box for the full head-to-head.</span>
       <a class="btn" href="${PX}vs-${encodeURIComponent(ids[0])}~${encodeURIComponent(ids[1])}">Compare two managers →</a>`));
   }
   return out.join('');
@@ -468,9 +468,10 @@ function viewSeason(S) {
       <span class="note">Start/sit ${(S.efficiency[best].pct * 100).toFixed(1)}% of best lineup</span></a>
       <a class="card" href="${ml(worst)}"><span class="k down">Worst manager</span><span class="v">${Math.round(S.scores[worst].total)}</span><span class="name">${nm(worst)}</span>
       <span class="note">Left ${Math.round(S.efficiency[worst].benchLeft)} pts on the bench</span></a></div>
-    <div class="rows">${ranked.map((r, i) => `<a class="row r-score" href="${ml(r)}"><span class="num" style="font-size:13px;color:#8A9C9F">${i + 1}</span>
-      <span class="stack" style="gap:7px"><span class="name" style="font-size:14px">${nm(r)}</span><span class="bar"><i style="width:${S.scores[r].total}%;background:${i === 0 ? GOLD : '#7E9093'}"></i></span></span>
-      <span class="val" style="font-size:17px">${Math.round(S.scores[r].total)}</span></a>`).join('')}</div>`));
+    <div class="rows">${ranked.map((r, i) => `<details class="sdd"><summary class="row r-score"><span class="num" style="font-size:13px;color:#8A9C9F">${i + 1}</span>
+      <span class="stack" style="gap:7px"><a class="name" style="font-size:14px" href="${ml(r)}@${S.season}">${nm(r)}</a><span class="bar"><i style="width:${S.scores[r].total}%;background:${i === 0 ? GOLD : '#7E9093'}"></i></span></span>
+      <span class="val" style="font-size:17px">${Math.round(S.scores[r].total)}</span></summary>${scoreParts(seasonPartRows(S, r), ml(r) + '@' + S.season, S.season)}</details>`).join('')}</div>
+    <span class="note">Tap a row for the score's parts. Tap a name for the manager's profile.</span>`));
 
   // Awards
   const aw = seasonAwards(S).filter(x => SEASON_TILE_AWARDS.indexOf(x.key) >= 0).map(x => ({ ...x, who: nm(x.rid) }));
@@ -600,6 +601,40 @@ function careerCalc(id, list) {
     <tr><td class="t" style="font-weight:600">Career</td><td></td><td style="color:#8A9C9F">${games}</td><td></td><td style="font-weight:600;color:#F1F4F3">${f1(c.score)}</td></tr></tbody></table></div>
     <ol class="steps"><li><b>Each season</b> gets its own score against that season's league (pick a year above to see its math).</li>
     <li><b>Career</b> = each season's score × its games played, added up, ÷ total games. Seasons with more games count more, and the current season counts the games played so far.</li></ol></div></details>`;
+}
+
+// Manager Score dropdowns: each part's 0–100 score, its weight and the stat behind it.
+function seasonPartRows(S, r) {
+  const sc = S.scores[r]; const W = CONFIG.weights;
+  const keys = ['results', 'startSit', 'waivers', 'trades'].concat(S.hasDraft ? ['draft'] : []);
+  const st = S.st[r]; const eff = S.efficiency[r];
+  const detail = {
+    results: wl(st.wins, st.losses, st.ties) + ' · ' + pct3(st.allPlayPct) + ' all-play' + (sc.bonusParts.length ? ' · ' + sc.bonusParts.join(', ') : ''),
+    startSit: (eff.pct * 100).toFixed(1) + '% of best lineup · ' + Math.round(eff.benchLeft) + ' pts left on bench',
+    waivers: f1(S.waivers[r].pts) + ' starter pts from ' + S.waivers[r].adds + ' pickup' + (S.waivers[r].adds === 1 ? '' : 's'),
+    trades: signed(S.tradeNet[r].net) + ' pts across ' + S.tradeNet[r].count + ' trade' + (S.tradeNet[r].count === 1 ? '' : 's'),
+    draft: 'Pick value vs. draft slot'
+  };
+  return keys.map(k => ({ k, w: W[k] / S.weightSum, v: sc.parts[k], d: detail[k] }));
+}
+function careerPartRows(c) {
+  const W = CONFIG.weights;
+  const keys = ['results', 'startSit', 'waivers', 'trades'].concat(c.parts.draft != null ? ['draft'] : []);
+  const wsum = keys.reduce((t, k) => t + W[k], 0);
+  const detail = {
+    results: wl(c.wins, c.losses, c.ties) + ' · ' + pct3(c.allPlayPct) + ' all-play · ' + c.titles + ' title' + (c.titles === 1 ? '' : 's'),
+    startSit: (c.effPct * 100).toFixed(1) + '% of best lineup · ' + Math.round(c.benchLeft) + ' pts left on bench',
+    waivers: f1(c.waiverPts) + ' starter pts from pickups',
+    trades: signed(c.tradeNet) + ' pts across ' + c.trades + ' trade' + (c.trades === 1 ? '' : 's'),
+    draft: 'Average draft part across seasons with a draft'
+  };
+  return keys.map(k => ({ k, w: W[k] / wsum, v: c.parts[k], d: detail[k] }));
+}
+function scoreParts(rows, href, label) {
+  return `<div class="sdd-body">${rows.map(p => `<div class="sdd-part"><div class="line2"><span style="font-size:13px;font-weight:500">${PART_LABELS[p.k]} <span class="note">${Math.round(p.w * 100)}%</span></span>
+    <span class="num" style="font-size:14px">${Math.round(p.v)}</span></div><span class="bar"><i style="width:${Math.max(0, Math.min(100, p.v))}%;background:${p.v >= 65 ? GOLD : p.v < 35 ? '#F0907A' : '#7E9093'}"></i></span>
+    <span class="note">${p.d}</span></div>`).join('')}
+    <a class="note" href="${href}">Full ${label} calculation on the profile →</a></div>`;
 }
 
 function breakdown(title, parts) {
@@ -1255,14 +1290,15 @@ function viewAwards() {
   bySeason.forEach(({ list }) => list.forEach(a => { seen[a.key] = seen[a.key] || a.k.replace(' watch', ''); }));
   const awardBlock = key => {
     const entries = bySeason.map(({ S, list }) => ({ S, a: list.find(x => x.key === key) })).filter(x => x.a);
-    return `<details class="calc"${key === 'champion' || key === 'sacko' ? ' open' : ''}><summary><span style="display:flex;align-items:center;gap:8px"><span class="dot" style="background:${awardColor(entries[0].a)}"></span>${esc(seen[key])}</span></summary>
+    const tier = entries[0].a.major ? 'major' : entries[0].a.good ? 'good' : 'bad';
+    return `<details class="calc aw-${tier}"${key === 'champion' || key === 'sacko' ? ' open' : ''}><summary><span style="display:flex;align-items:center;gap:8px"><span class="dot"></span>${esc(seen[key])}</span></summary>
       <div class="calc-body" style="padding-top:4px"><div class="rows">${entries.map(({ S, a }) => `<a class="row" href="${mlink(S.ownerOf[a.rid])}@${S.season}" style="grid-template-columns:52px minmax(0,1fr) auto">
         <span class="year">${S.season}</span><span class="stack"><span class="name" style="font-size:14px">${name(S.ownerOf[a.rid])}${S.isCurrent ? ' <span class="note">so far</span>' : ''}</span><span class="sub">${a.d}</span></span>
         <span class="num" style="font-size:14px">${a.v}</span></a>`).join('')}</div></div></details>`;
   };
   const isMajor = k => bySeason.some(({ list }) => list.some(x => x.key === k && x.major));
   const keys = AWARD_ORDER.filter(k => seen[k]);
-  out.push(section(`<h2 class="major-t">Major awards</h2>${keys.filter(isMajor).map(awardBlock).join('')}`));
+  out.push(section(`<h2 class="gold-t">Major awards</h2>${keys.filter(isMajor).map(awardBlock).join('')}`));
   out.push(section(`<h2>Season awards</h2>${keys.filter(k => !isMajor(k)).map(awardBlock).join('')}`));
   return out.join('');
 }

@@ -338,3 +338,31 @@ svg text { font-family: var(--mono); }
 .row.meet.po .year, .row.meet.po .note { color: #C3CCD1; }
 .row.meet.champ { box-shadow: inset 3px 0 0 var(--gold); background: rgba(232, 176, 75, 0.09); padding-left: 10px; }
 .row.meet.champ .year, .row.meet.champ .note { color: var(--gold); }
+
+/* Awards page dropdowns: major gold, good green, bad red */
+.calc.aw-major { border-color: rgba(232, 176, 75, 0.45); }
+.calc.aw-major summary { color: var(--gold); }
+.calc.aw-major .dot { background: var(--gold); }
+.calc.aw-good { border-color: rgba(95, 199, 155, 0.35); }
+.calc.aw-good summary { color: var(--up); }
+.calc.aw-good .dot { background: var(--up); }
+.calc.aw-bad { border-color: rgba(240, 144, 122, 0.35); }
+.calc.aw-bad summary { color: var(--down); }
+.calc.aw-bad .dot { background: var(--down); }
+.calc.aw-major .calc-body, .calc.aw-good .calc-body, .calc.aw-bad .calc-body { color: var(--fg); }
+
+/* Head-to-head grid: every box opens that matchup */
+.h2h td a.h2hlink { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; min-height: 30px; color: inherit; text-decoration: none; border-radius: 4px; }
+.h2h td a.h2hlink:hover { outline: 1px solid var(--fg-2); }
+
+/* Manager Score dropdown rows */
+details.sdd > summary { list-style: none; cursor: pointer; }
+details.sdd > summary::-webkit-details-marker { display: none; }
+details.sdd > summary.r-score { grid-template-columns: 28px minmax(0, 1fr) 52px 14px; }
+details.sdd > summary.r-score::after { content: ""; width: 7px; height: 7px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); margin-top: -4px; transition: transform .15s; justify-self: end; }
+details.sdd[open] > summary.r-score::after { transform: rotate(-135deg); margin-top: 4px; }
+details.sdd > summary a.name { color: inherit; text-decoration: none; justify-self: start; }
+details.sdd > summary a.name:hover { text-decoration: underline; text-underline-offset: 3px; }
+.sdd-body { display: flex; flex-direction: column; gap: 12px; padding: 4px 0 16px 40px; }
+.sdd-part { display: flex; flex-direction: column; gap: 5px; }
+details.sdd > summary a.name { align-self: flex-start; max-width: 100%; }
