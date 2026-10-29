@@ -4,7 +4,7 @@
 
 
 const API = 'https://api.sleeper.app/v1';
-const CACHE_VERSION = 'v4';
+const CACHE_VERSION = 'v5';
 
 // A commissioner's score edit is stored as custom_points; it replaces the computed score when set.
 const scoreOf = m => (m.custom_points != null ? m.custom_points : m.points) || 0;
@@ -109,7 +109,7 @@ async function loadSeason(league, state, isCurrent) {
     scoredThrough,
     currentWeek: isCurrent ? state.week : null,
     users: users.map(u => ({ user_id: u.user_id, display_name: u.display_name, team_name: u.metadata && u.metadata.team_name, avatar: u.avatar })),
-    rosters: rosters.map(r => ({ roster_id: r.roster_id, owner_id: r.owner_id, taxi: r.taxi || [] })),
+    rosters: rosters.map(r => ({ roster_id: r.roster_id, owner_id: r.owner_id, taxi: r.taxi || [], reserve: r.reserve || [] })),
     winners, losers,
     picks: (picks || []).map(p => ({ round: p.round, pick_no: p.pick_no, player_id: p.player_id, roster_id: p.roster_id, picked_by: p.picked_by, pos: p.metadata && p.metadata.position })),
     matchups: matchups.map(week => (week || []).map(m => ({

@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610290234';
-import { loadAll, loadLiveWeek, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610290234';
-import { buildModel, optimalPoints } from './model.js?v=202610290234';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610290234';
+import { CONFIG } from './config.js?v=202610290245';
+import { loadAll, loadLiveWeek, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610290245';
+import { buildModel, optimalPoints } from './model.js?v=202610290245';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610290245';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -967,7 +967,12 @@ function openMatchup(key) {
   const A = S.byWeek[w][g.a]; const B = S.byWeek[w][g.b];
   const pts = (m, p) => (m.players_points[p] || 0);
   const taxiOf = r => (S.taxi && S.taxi[r]) || new Set();
-  const bench = (m, r) => m.players.filter(p => m.starters.indexOf(p) < 0).sort((x, y) => pts(m, y) - pts(m, x)).map(p => ({ p, tx: taxiOf(r).has(p) }));
+  const irOf = r => (S.reserve && S.reserve[r]) || new Set();
+  // Non-starters split into bench, injured reserve and taxi squad, each sorted by points.
+  const group = (m, r, kind) => m.players.filter(p => m.starters.indexOf(p) < 0).filter(p => {
+    const tx = taxiOf(r).has(p); const ir = !tx && irOf(r).has(p);
+    return kind === 'TX' ? tx : kind === 'IR' ? ir : !tx && !ir;
+  }).sort((x, y) => pts(m, y) - pts(m, x));
   const best = (m, r) => { const pool = m.players.filter(p => !taxiOf(r).has(p) || m.starters.indexOf(p) >= 0);
     return Math.max(optimalPoints(S.startSlots || S.slots, pool, m.players_points, S.posOf), sum(m.starters.map(p => pts(m, p)))); };
   const slots = S.startSlots || S.slots;
@@ -981,12 +986,17 @@ function openMatchup(key) {
     const ha = pa && pb && pts(A, pa) > pts(B, pb); const hb = pa && pb && pts(B, pb) > pts(A, pa);
     rowsHtml += `<div class="mrow${ha ? ' la' : ''}${hb ? ' lb' : ''}">${cellL(A, pa)}${ptsCell(A, pa)}<span class="slot">${esc(slotLabel(slots[i] || ''))}</span>${ptsCell(B, pb, 1)}${cellR(B, pb)}</div>`;
   }
-  const ba = bench(A, g.a); const bb = bench(B, g.b);
-  let benchHtml = '';
-  for (let i = 0; i < Math.max(ba.length, bb.length); i++) {
-    const x = ba[i]; const y = bb[i];
-    benchHtml += `<div class="mrow bn">${x ? cellL(A, x.p) + ptsCell(A, x.p) : '<span></span><span></span>'}<span class="slot">${x && x.tx || y && y.tx ? 'TX' : 'BN'}</span>${y ? ptsCell(B, y.p, 1) + cellR(B, y.p) : '<span></span><span></span>'}</div>`;
-  }
+  const GROUPS = [['BN', 'Bench'], ['IR', 'Injured reserve'], ['TX', 'Taxi squad']];
+  const benchHtml = GROUPS.map(([kind, label]) => {
+    const xa = group(A, g.a, kind); const xb = group(B, g.b, kind);
+    if (!xa.length && !xb.length) return '';
+    let h = `<span class="note mlabel">${label}</span>`;
+    for (let i = 0; i < Math.max(xa.length, xb.length); i++) {
+      const x = xa[i]; const y = xb[i];
+      h += `<div class="mrow bn">${x ? cellL(A, x) + ptsCell(A, x) : '<span></span><span></span>'}<span class="slot">${kind}</span>${y ? ptsCell(B, y, 1) + cellR(B, y) : '<span></span><span></span>'}</div>`;
+    }
+    return h;
+  }).join('');
   const head = (m, r, right) => { const won = m.points > (r === g.a ? g.bp : g.ap); const edited = Math.abs(sum(m.starters.map(p => pts(m, p))) - m.points) > 0.01;
     return `<div class="stack"${right ? ' style="text-align:right;align-items:flex-end"' : ''}><a class="name" href="${mlink(S.ownerOf[r])}" data-close style="text-decoration:none">${name(S.ownerOf[r])}</a>
       <span class="num${won ? '' : ' trail-t'}" style="font-size:26px;font-weight:600">${f2(m.points)}</span>
@@ -1005,8 +1015,8 @@ function openMatchup(key) {
       <button type="button" class="close" data-close aria-label="Close">✕</button></div>
     <div class="mhead">${head(A, g.a)}${head(B, g.b, 1)}</div>
     <div class="mtable"><span class="note mlabel">Starters</span>${rowsHtml}
-      ${benchHtml ? `<span class="note mlabel">Bench</span>${benchHtml}` : ''}</div>
-    <p class="note" style="margin:0">Highlighted points won that lineup slot. Best possible = the highest score that week's roster could have started${S.taxi ? ' (taxi players left out)' : ''}.</p>
+      ${benchHtml}</div>
+    <p class="note" style="margin:0">Highlighted points won that lineup slot. Best possible = the highest score that week's roster could have started${S.taxi ? ' (taxi players left out)' : ''}.${S.taxi || Object.keys(S.reserve || {}).length ? ' Sleeper only saves the latest taxi and IR lists, so older weeks use ' + (S.isCurrent ? 'the current ones' : 'the end-of-season ones') + '.' : ''}</p>
   </div>`;
   if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
   const c = dlg.querySelector('.close'); if (c) c.focus();

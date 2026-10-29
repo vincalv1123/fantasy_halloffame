@@ -1,7 +1,7 @@
 // Turns raw Sleeper data into every stat, award and score the site shows.
 // Pure functions only: nothing here touches the page or the network.
 
-import { CONFIG } from './config.js?v=202610290234';
+import { CONFIG } from './config.js?v=202610290245';
 
 const ELIGIBLE = {
   QB: ['QB'], RB: ['RB'], WR: ['WR'], TE: ['TE'], K: ['K'], DEF: ['DEF'],
@@ -173,6 +173,8 @@ function buildSeason(raw, players, isNewest, later, format, opts) {
   const taxi = {};
   raw.rosters.forEach(r => { if (r.taxi && r.taxi.length) taxi[r.roster_id] = new Set(r.taxi); });
   S.taxi = Object.keys(taxi).length ? taxi : null;
+  S.reserve = {};
+  raw.rosters.forEach(r => { if (r.reserve && r.reserve.length) S.reserve[r.roster_id] = new Set(r.reserve); });
 
   // Start/sit efficiency and bench blunders.
   const eff = {};
