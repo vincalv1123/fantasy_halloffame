@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610290245';
-import { loadAll, loadLiveWeek, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610290245';
-import { buildModel, optimalPoints } from './model.js?v=202610290245';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610290245';
+import { CONFIG } from './config.js?v=202610290248';
+import { loadAll, loadLiveWeek, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610290248';
+import { buildModel, optimalPoints } from './model.js?v=202610290248';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610290248';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -967,12 +967,9 @@ function openMatchup(key) {
   const A = S.byWeek[w][g.a]; const B = S.byWeek[w][g.b];
   const pts = (m, p) => (m.players_points[p] || 0);
   const taxiOf = r => (S.taxi && S.taxi[r]) || new Set();
-  const irOf = r => (S.reserve && S.reserve[r]) || new Set();
-  // Non-starters split into bench, injured reserve and taxi squad, each sorted by points.
-  const group = (m, r, kind) => m.players.filter(p => m.starters.indexOf(p) < 0).filter(p => {
-    const tx = taxiOf(r).has(p); const ir = !tx && irOf(r).has(p);
-    return kind === 'TX' ? tx : kind === 'IR' ? ir : !tx && !ir;
-  }).sort((x, y) => pts(m, y) - pts(m, x));
+  // Non-starters split into bench (IR included) and taxi squad, each sorted by points.
+  const group = (m, r, kind) => m.players.filter(p => m.starters.indexOf(p) < 0)
+    .filter(p => (kind === 'TX') === taxiOf(r).has(p)).sort((x, y) => pts(m, y) - pts(m, x));
   const best = (m, r) => { const pool = m.players.filter(p => !taxiOf(r).has(p) || m.starters.indexOf(p) >= 0);
     return Math.max(optimalPoints(S.startSlots || S.slots, pool, m.players_points, S.posOf), sum(m.starters.map(p => pts(m, p)))); };
   const slots = S.startSlots || S.slots;
@@ -986,7 +983,7 @@ function openMatchup(key) {
     const ha = pa && pb && pts(A, pa) > pts(B, pb); const hb = pa && pb && pts(B, pb) > pts(A, pa);
     rowsHtml += `<div class="mrow${ha ? ' la' : ''}${hb ? ' lb' : ''}">${cellL(A, pa)}${ptsCell(A, pa)}<span class="slot">${esc(slotLabel(slots[i] || ''))}</span>${ptsCell(B, pb, 1)}${cellR(B, pb)}</div>`;
   }
-  const GROUPS = [['BN', 'Bench'], ['IR', 'Injured reserve'], ['TX', 'Taxi squad']];
+  const GROUPS = [['BN', 'Bench'], ['TX', 'Taxi squad']];
   const benchHtml = GROUPS.map(([kind, label]) => {
     const xa = group(A, g.a, kind); const xb = group(B, g.b, kind);
     if (!xa.length && !xb.length) return '';
@@ -1016,7 +1013,7 @@ function openMatchup(key) {
     <div class="mhead">${head(A, g.a)}${head(B, g.b, 1)}</div>
     <div class="mtable"><span class="note mlabel">Starters</span>${rowsHtml}
       ${benchHtml}</div>
-    <p class="note" style="margin:0">Highlighted points won that lineup slot. Best possible = the highest score that week's roster could have started${S.taxi ? ' (taxi players left out)' : ''}.${S.taxi || Object.keys(S.reserve || {}).length ? ' Sleeper only saves the latest taxi and IR lists, so older weeks use ' + (S.isCurrent ? 'the current ones' : 'the end-of-season ones') + '.' : ''}</p>
+    <p class="note" style="margin:0">Highlighted points won that lineup slot. Best possible = the highest score that week's roster could have started${S.taxi ? ' (taxi players left out)' : ''}.${S.taxi ? ' Sleeper only saves the latest taxi squads, so older weeks use ' + (S.isCurrent ? 'the current ones' : 'the end-of-season ones') + '.' : ''}</p>
   </div>`;
   if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
   const c = dlg.querySelector('.close'); if (c) c.focus();
