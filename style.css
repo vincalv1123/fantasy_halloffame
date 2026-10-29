@@ -370,3 +370,6 @@ details.sdd > summary a.name { align-self: flex-start; max-width: 100%; }
 /* Record tiles that open the game */
 button.tile.tbtn { background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; margin: 0; border-top: 0; border-left: 0; border-radius: 0; }
 button.tile.tbtn:hover, button.tile.tbtn:focus-visible { background: var(--panel); outline: none; }
+
+/* Award cabinet: the Sacko is black and always listed last */
+.sacko-t { display: inline-block; background: #000; color: #E9ECEB; border: 1px solid #3A4549; border-radius: 999px; padding: 0 7px; line-height: 1.5; }
