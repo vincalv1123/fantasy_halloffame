@@ -366,3 +366,7 @@ details.sdd > summary a.name:hover { text-decoration: underline; text-underline-
 .sdd-body { display: flex; flex-direction: column; gap: 12px; padding: 4px 0 16px 40px; }
 .sdd-part { display: flex; flex-direction: column; gap: 5px; }
 details.sdd > summary a.name { align-self: flex-start; max-width: 100%; }
+
+/* Record tiles that open the game */
+button.tile.tbtn { background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; margin: 0; border-top: 0; border-left: 0; border-radius: 0; }
+button.tile.tbtn:hover, button.tile.tbtn:focus-visible { background: var(--panel); outline: none; }

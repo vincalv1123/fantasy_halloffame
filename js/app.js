@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610291559';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610291559';
-import { buildModel, optimalPoints } from './model.js?v=202610291559';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610291559';
+import { CONFIG } from './config.js?v=202610291606';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610291606';
+import { buildModel, optimalPoints } from './model.js?v=202610291606';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610291606';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -196,9 +196,12 @@ function viewAll() {
 
   if (M.records.length) {
     out.push(section(`<h2>Single-game records</h2><div class="tiles">${M.records.map(r => `
-      <div class="tile">${r.isNew ? '<span class="tag gold" style="align-self:flex-start">New record</span>' : ''}
+      ${(() => { const S = seasonOf(r.season); const key = r.week && r.owner ? gameKey(S, r.week, ridOf(S, r.owner)) : null;
+        const inner = `${r.isNew ? '<span class="tag gold" style="align-self:flex-start">New record</span>' : ''}
       <span class="k">${esc(r.label)}</span><span class="v">${esc(r.display)}</span><span class="w">${esc(r.who)}</span>
-      <span class="d">${r.season}${r.week ? ' · Week ' + r.week : ''}${r.detail ? ' · ' + esc(r.detail) : ''}</span></div>`).join('')}</div>`));
+      <span class="d">${r.season}${r.week ? ' · Week ' + r.week : ''}${r.detail ? ' · ' + esc(r.detail) : ''}</span>`;
+        return key ? `<button type="button" class="tile tbtn" data-matchup="${key}">${inner}</button>` : `<div class="tile">${inner}</div>`; })()}`).join('')}</div>
+    <span class="note">Tap a record to see that game's lineups.</span>`));
   }
 
   const byLuck = lb.slice().sort((a, b) => b.luck - a.luck);
@@ -905,13 +908,15 @@ function viewPlayoffs() {
     const finals = flat.filter(x => x.g.placement === 1 && x.me > x.them).sort((a, b) => b.me - a.me)[0];
     const win = x => (x.g.ap > x.g.bp ? x.g.a : x.g.b); const lose = x => (x.g.ap > x.g.bp ? x.g.b : x.g.a);
     const tiles = [
-      ['Highest playoff score', f2(hi.me), name(hi.S.ownerOf[hi.r]), hi.S.season + ' · Week ' + hi.g.week],
-      lo ? ['Lowest playoff score', f2(lo.me), name(lo.S.ownerOf[lo.r]), lo.S.season + ' · Week ' + lo.g.week] : null,
-      ['Biggest playoff blowout', '+' + f2(Math.abs(blow.g.ap - blow.g.bp)), name(blow.S.ownerOf[win(blow)]) + ' over ' + name(blow.S.ownerOf[lose(blow)]), blow.S.season + ' · Week ' + blow.g.week],
-      close ? ['Closest playoff game', f2(Math.abs(close.g.ap - close.g.bp)), name(close.S.ownerOf[win(close)]) + ' over ' + name(close.S.ownerOf[lose(close)]), close.S.season + ' · Week ' + close.g.week] : null,
-      finals ? ['Best title-game score', f2(finals.me), name(finals.S.ownerOf[finals.r]), finals.S.season + ' final'] : null
+      ['Highest playoff score', f2(hi.me), name(hi.S.ownerOf[hi.r]), hi.S.season + ' · Week ' + hi.g.week, gameKey(hi.S, hi.g.week, hi.r)],
+      lo ? ['Lowest playoff score', f2(lo.me), name(lo.S.ownerOf[lo.r]), lo.S.season + ' · Week ' + lo.g.week, gameKey(lo.S, lo.g.week, lo.r)] : null,
+      ['Biggest playoff blowout', '+' + f2(Math.abs(blow.g.ap - blow.g.bp)), name(blow.S.ownerOf[win(blow)]) + ' over ' + name(blow.S.ownerOf[lose(blow)]), blow.S.season + ' · Week ' + blow.g.week, gameKey(blow.S, blow.g.week, blow.g.a)],
+      close ? ['Closest playoff game', f2(Math.abs(close.g.ap - close.g.bp)), name(close.S.ownerOf[win(close)]) + ' over ' + name(close.S.ownerOf[lose(close)]), close.S.season + ' · Week ' + close.g.week, gameKey(close.S, close.g.week, close.g.a)] : null,
+      finals ? ['Best title-game score', f2(finals.me), name(finals.S.ownerOf[finals.r]), finals.S.season + ' final', gameKey(finals.S, finals.g.week, finals.r)] : null
     ].filter(Boolean);
-    out.push(section(`<h2>Playoff records</h2><div class="tiles">${tiles.map(t => `<div class="tile"><span class="k">${t[0]}</span><span class="v">${t[1]}</span><span class="w">${t[2]}</span><span class="d">${t[3]}</span></div>`).join('')}</div>`));
+    out.push(section(`<h2>Playoff records</h2><div class="tiles">${tiles.map(t => { const inner = `<span class="k">${t[0]}</span><span class="v">${t[1]}</span><span class="w">${t[2]}</span><span class="d">${t[3]}</span>`;
+      return t[4] ? `<button type="button" class="tile tbtn" data-matchup="${t[4]}">${inner}</button>` : `<div class="tile">${inner}</div>`; }).join('')}</div>
+    <span class="note">Tap a record to see that game's lineups.</span>`));
   }
 
   // Brackets, newest first. The current season shows the seeding as it stands.
@@ -1014,6 +1019,14 @@ function viewMatchups(seasonSel, openWeek) {
     <div style="display:flex;flex-direction:column;gap:8px">${blocks.join('')}</div>`));
   return out.join('');
 }
+
+// The matchup key (season:week:matchup) for the game a roster played that week, for the pop-up.
+function gameKey(S, week, rid) {
+  if (!S || !week || rid == null) return null;
+  const g = weekGames(S, week).find(x => x.a === rid || x.b === rid);
+  return g ? S.season + ':' + week + ':' + g.mid : null;
+}
+const ridOf = (S, owner) => (S ? S.rids.find(x => S.ownerOf[x] === owner) : null);
 
 // One-line box score from Sleeper's weekly stats.
 function statLine(pos, s) {
