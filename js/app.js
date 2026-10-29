@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610290248';
-import { loadAll, loadLiveWeek, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610290248';
-import { buildModel, optimalPoints } from './model.js?v=202610290248';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610290248';
+import { CONFIG } from './config.js?v=202610290445';
+import { loadAll, loadLiveWeek, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610290445';
+import { buildModel, optimalPoints } from './model.js?v=202610290445';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610290445';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -380,13 +380,13 @@ const SEASON_TILE_AWARDS = ['waiver', 'trade', 'steal', 'bust', 'blunder', 'sack
 function seasonAwards(S) {
   const aw = [];
   const done = !S.isCurrent;
-  if (S.champion) aw.push({ key: 'champion', k: 'Champion', rid: S.champion, v: wl(S.st[S.champion].wins, S.st[S.champion].losses, S.st[S.champion].ties), d: 'Won the title', cls: 'gold-t', good: true });
+  if (S.champion) aw.push({ key: 'champion', k: 'Champion', rid: S.champion, v: wl(S.st[S.champion].wins, S.st[S.champion].losses, S.st[S.champion].ties), d: 'Won the title', cls: 'major-t', good: true, major: true });
   if (S.runnerUp) aw.push({ key: 'runnerUp', k: 'Runner-up', rid: S.runnerUp, v: wl(S.st[S.runnerUp].wins, S.st[S.runnerUp].losses, S.st[S.runnerUp].ties), d: 'Lost the final', cls: '', good: true });
   const top = S.standings[0];
-  if (top && done) aw.push({ key: 'regSeason', k: 'Regular-season champ', rid: top.rid, v: wl(top.wins, top.losses, top.ties), d: comma(top.pf) + ' PF · No. 1 seed', cls: 'gold-t', good: true });
+  if (top && done) aw.push({ key: 'regSeason', k: 'Regular-season champ', rid: top.rid, v: wl(top.wins, top.losses, top.ties), d: comma(top.pf) + ' PF · No. 1 seed', cls: 'major-t', good: true, major: true });
   const ranked = S.rids.slice().sort((a, b) => S.scores[b].total - S.scores[a].total);
   if (ranked.length) {
-    aw.push({ key: 'bestMgr', k: 'Best manager', rid: ranked[0], v: String(Math.round(S.scores[ranked[0]].total)), d: 'Highest Manager Score', cls: 'gold-t', good: true });
+    aw.push({ key: 'bestMgr', k: 'Best manager', rid: ranked[0], v: String(Math.round(S.scores[ranked[0]].total)), d: 'Highest Manager Score', cls: 'major-t', good: true, major: true });
     aw.push({ key: 'worstMgr', k: 'Worst manager', rid: ranked[ranked.length - 1], v: String(Math.round(S.scores[ranked[ranked.length - 1]].total)), d: 'Lowest Manager Score', cls: 'down', good: false });
   }
   const wk = S.rids.slice().sort((a, b) => S.waivers[b].pts - S.waivers[a].pts)[0];
@@ -608,15 +608,19 @@ function breakdown(title, parts) {
 }
 
 // Awards a manager won in one season, and across a career.
+// Major awards (champion, regular-season champ, best manager) are blue; other good awards gold; bad ones red.
+const MAJOR_BLUE = '#7CC4F5';
+const awardColor = a => (a.major ? MAJOR_BLUE : a.good ? GOLD : '#F0907A');
+const awardTier = a => (a.major ? 2 : a.good ? 1 : 0);
 function awardRow(a, sub) {
   return `<div class="row" style="grid-template-columns:22px minmax(0,1fr) auto;padding:12px 0">
-    <span class="dot" style="background:${a.good ? GOLD : '#F0907A'};width:8px;height:8px"></span>
+    <span class="dot" style="background:${awardColor(a)};width:8px;height:8px"></span>
     <span class="stack"><span style="font-size:14px;font-weight:500">${esc(a.k)}</span><span class="sub">${sub}</span></span>
     <span class="num" style="font-size:14px">${a.v}</span></div>`;
 }
 function managerSeasonAwards(x) {
-  const mine = seasonAwards(x.S).filter(a => a.rid === x.r).sort((a, b) => b.good - a.good);
-  const head = `<div class="head"><h2>${x.S.season} awards</h2><span class="note">${x.S.isCurrent ? 'So far this season' : mine.filter(a => a.good).length + ' good · ' + mine.filter(a => !a.good).length + ' bad'}</span></div>`;
+  const mine = seasonAwards(x.S).filter(a => a.rid === x.r).sort((a, b) => awardTier(b) - awardTier(a));
+  const head = `<div class="head"><h2>${x.S.season} awards</h2><span class="note">${x.S.isCurrent ? 'So far this season' : (mine.some(a => a.major) ? mine.filter(a => a.major).length + ' major · ' : '') + mine.filter(a => a.good && !a.major).length + ' good · ' + mine.filter(a => !a.good).length + ' bad'}</span></div>`;
   if (!mine.length) return head + '<p class="lead">No awards this season.</p>';
   return head + `<div class="rows">${mine.map(a => awardRow(a, a.d)).join('')}</div>`;
 }
@@ -624,16 +628,17 @@ function managerCareerAwards(id, list) {
   const won = {};
   list.filter(x => !x.S.isCurrent).forEach(x => seasonAwards(x.S).filter(a => a.rid === x.r).forEach(a => {
     const k = a.key === 'sacko' ? 'Sacko' : a.k;
-    const w = won[k] = won[k] || { k, good: a.good, years: [] };
+    const w = won[k] = won[k] || { k, good: a.good, major: a.major, years: [] };
     w.years.push(x.S.season);
   }));
-  const rows = Object.values(won).sort((a, b) => b.good - a.good || b.years.length - a.years.length);
-  const good = rows.filter(r => r.good).reduce((t, r) => t + r.years.length, 0);
+  const rows = Object.values(won).sort((a, b) => awardTier(b) - awardTier(a) || b.years.length - a.years.length);
+  const major = rows.filter(r => r.major).reduce((t, r) => t + r.years.length, 0);
+  const good = rows.filter(r => r.good && !r.major).reduce((t, r) => t + r.years.length, 0);
   const bad = rows.filter(r => !r.good).reduce((t, r) => t + r.years.length, 0);
   const cur = list.find(x => x.S.isCurrent);
   const curAw = cur ? seasonAwards(cur.S).filter(a => a.rid === cur.r) : [];
   let html = `<div class="head"><h2>Career awards</h2><span class="note">Finished seasons</span></div>
-    <div class="cards"><div class="card"><span class="k gold-t">Good awards</span><span class="v">${good}</span></div><div class="card"><span class="k down">Bad awards</span><span class="v">${bad}</span></div></div>`;
+    <div class="cards"><div class="card"><span class="k major-t">Major awards</span><span class="v">${major}</span></div><div class="card"><span class="k gold-t">Good awards</span><span class="v">${good}</span></div><div class="card"><span class="k down">Bad awards</span><span class="v">${bad}</span></div></div>`;
   html += rows.length ? `<div class="rows">${rows.map(r => awardRow({ ...r, v: r.years.length > 1 ? '×' + r.years.length : '' }, r.years.sort().reverse().join(', '))).join('')}</div>` : '<p class="lead">No awards yet.</p>';
   if (curAw.length) html += `<p class="note" style="margin:0">On track in ${cur.S.season}: ${curAw.map(a => esc(a.k)).join(', ')}. These count once the season ends.</p>`;
   return html;
@@ -1173,26 +1178,29 @@ function viewAwards() {
   const cab = {};
   bySeason.filter(x => !x.S.isCurrent).forEach(({ S, list }) => list.forEach(a => {
     const id = S.ownerOf[a.rid];
-    const c = cab[id] = cab[id] || { id, good: 0, bad: 0, items: {} };
-    if (a.good) c.good++; else c.bad++;
+    const c = cab[id] = cab[id] || { id, major: 0, good: 0, bad: 0, items: {} };
+    if (a.major) c.major++; else if (a.good) c.good++; else c.bad++;
     c.items[a.k] = (c.items[a.k] || 0) + 1;
   }));
-  const rows = Object.values(cab).sort((a, b) => b.good - a.good || a.bad - b.bad);
+  const rows = Object.values(cab).sort((a, b) => b.major - a.major || b.good - a.good || a.bad - b.bad);
   out.push(section(`<div class="head"><h2>Award cabinet</h2><span class="note">Finished seasons</span></div>
     <div class="rows">${rows.map((c, i) => `<a class="row" href="${mlink(c.id)}" style="grid-template-columns:minmax(0,1fr) auto">
       <span class="stack"><span class="name">${name(c.id)}</span><span class="sub">${Object.keys(c.items).map(k => (c.items[k] > 1 ? c.items[k] + '× ' : '') + esc(k)).join(' · ')}</span></span>
-      <span style="display:flex;gap:6px"><span class="tag ${i === 0 ? 'gold' : 'up'}">${c.good} good</span><span class="tag down">${c.bad} bad</span></span></a>`).join('')}</div>`));
+      <span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><span class="tag major">${c.major} major</span><span class="tag ${i === 0 ? 'gold' : 'up'}">${c.good} good</span><span class="tag down">${c.bad} bad</span></span></a>`).join('')}</div>`));
 
   const seen = {};
   bySeason.forEach(({ list }) => list.forEach(a => { seen[a.key] = seen[a.key] || a.k.replace(' watch', ''); }));
-  out.push(section(`<h2>By award</h2>${AWARD_ORDER.filter(k => seen[k]).map(key => {
+  const awardBlock = key => {
     const entries = bySeason.map(({ S, list }) => ({ S, a: list.find(x => x.key === key) })).filter(x => x.a);
-    const good = entries[0].a.good;
-    return `<details class="calc"${key === 'champion' || key === 'sacko' ? ' open' : ''}><summary><span style="display:flex;align-items:center;gap:8px"><span class="dot" style="background:${good ? GOLD : '#F0907A'}"></span>${esc(seen[key])}</span></summary>
+    return `<details class="calc"${key === 'champion' || key === 'sacko' ? ' open' : ''}><summary><span style="display:flex;align-items:center;gap:8px"><span class="dot" style="background:${awardColor(entries[0].a)}"></span>${esc(seen[key])}</span></summary>
       <div class="calc-body" style="padding-top:4px"><div class="rows">${entries.map(({ S, a }) => `<a class="row" href="${mlink(S.ownerOf[a.rid])}@${S.season}" style="grid-template-columns:52px minmax(0,1fr) auto">
         <span class="year">${S.season}</span><span class="stack"><span class="name" style="font-size:14px">${name(S.ownerOf[a.rid])}${S.isCurrent ? ' <span class="note">so far</span>' : ''}</span><span class="sub">${a.d}</span></span>
         <span class="num" style="font-size:14px">${a.v}</span></a>`).join('')}</div></div></details>`;
-  }).join('')}`));
+  };
+  const isMajor = k => bySeason.some(({ list }) => list.some(x => x.key === k && x.major));
+  const keys = AWARD_ORDER.filter(k => seen[k]);
+  out.push(section(`<h2 class="major-t">Major awards</h2>${keys.filter(isMajor).map(awardBlock).join('')}`));
+  out.push(section(`<h2>Season awards</h2>${keys.filter(k => !isMajor(k)).map(awardBlock).join('')}`));
   return out.join('');
 }
 
