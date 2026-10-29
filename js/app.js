@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610290522';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610290522';
-import { buildModel, optimalPoints } from './model.js?v=202610290522';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610290522';
+import { CONFIG } from './config.js?v=202610290525';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610290525';
+import { buildModel, optimalPoints } from './model.js?v=202610290525';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610290525';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -768,6 +768,18 @@ function viewCompare(a, b) {
     <div class="stats"><div><span>Avg margin</span><span>${r.games ? f1(r.margin) : '—'}</span></div><div><span>Playoffs</span><span>${r.playoff ? poW + '–' + poL : '—'}</span></div>
     <div><span>Last meeting</span><span style="font-size:13px">${last ? last.season + ' W' + last.week + ' · ' + (last.mine > last.theirs ? 'W' : last.mine < last.theirs ? 'L' : 'T') : '—'}</span></div></div></div></section>`);
 
+  // Every game between them, newest first; each opens that game in Matchup history.
+  const meetings = r.list.slice().sort((p, q) => Number(q.season) - Number(p.season) || q.week - p.week).map(m => {
+    const S = seasonOf(m.season);
+    const g = S ? weekGames(S, m.week).find(x => (S.ownerOf[x.a] === a && S.ownerOf[x.b] === b) || (S.ownerOf[x.a] === b && S.ownerOf[x.b] === a)) : null;
+    const href = PX + 'matchups@' + m.season + '@' + m.week + (g ? '@' + g.mid : '');
+    const aw = m.mine > m.theirs; const bw = m.theirs > m.mine;
+    return `<a class="row meet" href="${href}"><span class="year">${m.season}</span><span class="note">Week ${m.week}</span>
+      <span class="num${aw ? ' win' : ''}">${f2(m.mine)}</span><span class="num${bw ? ' win' : ''}">${f2(m.theirs)}</span></a>`;
+  });
+  out.push(section(`<div class="head"><h2>All meetings</h2><span class="note">${r.games} game${r.games === 1 ? '' : 's'} · tap one to open it in Matchup history</span></div>
+    ${meetings.length ? `<div class="rows"><div class="row meet head-row"><span>Year</span><span>Week</span><span>${name(a)}</span><span>${name(b)}</span></div>${meetings.join('')}</div>` : '<p class="lead">These two have never played each other.</p>'}`));
+
   const keys = [['Overall', A.score, B.score], ['Results', A.parts.results, B.parts.results], ['Start/sit', A.parts.startSit, B.parts.startSit],
     ['Waivers', A.parts.waivers, B.parts.waivers], ['Trades', A.parts.trades, B.parts.trades], ['Draft', A.parts.draft, B.parts.draft]].filter(k => k[1] != null && k[2] != null);
   out.push(section(`<div class="head"><h2>Manager Score</h2><span class="legend"><span><i style="background:${GOLD}"></i> ${name(a)}</span><span><i style="background:#C9D3D2"></i> ${name(b)}</span></span></div>
@@ -939,7 +951,7 @@ function historyWeeks(S) {
   return weeks;
 }
 
-function viewMatchups(seasonSel) {
+function viewMatchups(seasonSel, openWeek) {
   const S = M.seasons.find(x => x.season === seasonSel) || M.seasons[0];
   const nm = r => name(S.ownerOf[r]);
   const weeks = historyWeeks(S);
@@ -957,7 +969,7 @@ function viewMatchups(seasonSel) {
     const flat = [].concat.apply([], games.map(g => [[g.a, g.ap], [g.b, g.bp]]));
     const hi = flat.sort((x, y) => y[1] - x[1])[0];
     const tag = live ? 'In progress' : w >= S.playoffWeekStart ? 'Playoffs' : '';
-    return `<details class="calc"><summary><span>Week ${w}${tag ? ` · <span class="note">${tag}</span>` : ''}</span><span class="note" style="margin-left:auto;padding-left:10px">High: ${nm(hi[0])} ${f1(hi[1])}</span></summary>
+    return `<details class="calc" data-week="${w}"${w === openWeek ? ' open' : ''}><summary><span>Week ${w}${tag ? ` · <span class="note">${tag}</span>` : ''}</span><span class="note" style="margin-left:auto;padding-left:10px">High: ${nm(hi[0])} ${f1(hi[1])}</span></summary>
       <div class="calc-body"><div class="mgrid">${games.map(g => gameRow(w, g)).join('')}</div></div></details>`;
   });
   out.push(section(`<div class="head"><h2>Weeks</h2><span class="note">Newest first · tap a week, then a game for both lineups</span></div>
@@ -1351,7 +1363,7 @@ function parse(h) {
   if (h.indexOf('m-') === 0) { const p = h.slice(2).split('@'); return { view: 'manager', id: p[0], season: p[1] || null }; }
   if (h === 'search') return { view: 'search' };
   if (h === 'awards') return { view: 'awards' };
-  if (h === 'matchups' || h.indexOf('matchups@') === 0) return { view: 'matchups', season: h.split('@')[1] || null };
+  if (h === 'matchups' || h.indexOf('matchups@') === 0) { const p = h.split('@'); return { view: 'matchups', season: p[1] || null, week: p[2] ? Number(p[2]) : null, mid: p[3] ? Number(p[3]) : null }; }
   if (h === 'playoffs') return { view: 'playoffs' };
   if (h === 'drafts' || h.indexOf('drafts@') === 0) return { view: 'drafts', season: h.split('@')[1] || null };
   if (h.indexOf('vs-') === 0) { const p = h.slice(3).split('~'); return { view: 'compare', a: p[0], b: p[1] }; }
@@ -1393,7 +1405,15 @@ function render() {
     $app.innerHTML = viewPlayoffs();
     document.title = 'Playoffs' + suffix;
   } else if (route.view === 'matchups') {
-    $app.innerHTML = viewMatchups(route.season);
+    $app.innerHTML = viewMatchups(route.season, route.week);
+    if (route.week) setTimeout(() => {
+      // Arrived from a head-to-head meeting: open that week, point at the game and show its lineups.
+      const sel = route.mid ? `[data-matchup="${route.season}:${route.week}:${route.mid}"]` : `details[data-week="${route.week}"]`;
+      const el = document.querySelector(sel);
+      if (!el) return;
+      el.scrollIntoView({ block: 'center' });
+      if (route.mid) { el.classList.add('flash'); openMatchup(el.dataset.matchup); }
+    }, 0);
     document.title = 'Matchup history' + suffix;
   } else if (route.view === 'awards') {
     $app.innerHTML = viewAwards();

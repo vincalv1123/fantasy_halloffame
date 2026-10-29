@@ -320,3 +320,11 @@ svg text { font-family: var(--mono); }
 .mrow .sl:empty { display: none; }
 .box.mclick { cursor: pointer; transition: border-color .15s, background .15s; }
 .box.mclick:hover, .box.mclick:focus-visible { border-color: var(--line-strong); background: var(--panel); outline: none; }
+
+/* Head-to-head: all meetings */
+.row.meet { grid-template-columns: 52px 72px minmax(0,1fr) minmax(0,1fr); padding: 11px 0; text-decoration: none; align-items: center; }
+.row.meet .num { font-size: 14px; text-align: right; color: var(--muted); }
+.row.meet .num.win { color: var(--fg); font-weight: 600; }
+.row.meet.head-row { font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); padding: 6px 0; }
+.row.meet.head-row span:nth-child(n+3) { text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pgame.flash { border-color: var(--fg-2); background: var(--panel); }
