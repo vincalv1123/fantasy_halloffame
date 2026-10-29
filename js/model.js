@@ -1,7 +1,7 @@
 // Turns raw Sleeper data into every stat, award and score the site shows.
 // Pure functions only: nothing here touches the page or the network.
 
-import { CONFIG } from './config.js?v=202610280503';
+import { CONFIG } from './config.js?v=202610290234';
 
 const ELIGIBLE = {
   QB: ['QB'], RB: ['RB'], WR: ['WR'], TE: ['TE'], K: ['K'], DEF: ['DEF'],
@@ -122,6 +122,9 @@ function buildSeason(raw, players, isNewest, later, format, opts) {
     games.push({ season: raw.season, week: w, playoff: true, round: m.r, placement: m.p || null, a: m.t1, b: m.t2, ap: a.points, bp: b.points });
   });
   S.games = games;
+  S.winners = raw.winners || [];
+  S.losers = raw.losers || [];
+  S.startSlots = raw.rosterPositions.filter(s => s !== 'BN' && s !== 'IR' && s !== 'TAXI');
   S.playoffRids = playoffRids;
 
   // Standings, all-play and luck.
@@ -169,6 +172,7 @@ function buildSeason(raw, players, isNewest, later, format, opts) {
   // Sleeper only keeps the end-of-season taxi squad, so that list is used for every week.
   const taxi = {};
   raw.rosters.forEach(r => { if (r.taxi && r.taxi.length) taxi[r.roster_id] = new Set(r.taxi); });
+  S.taxi = Object.keys(taxi).length ? taxi : null;
 
   // Start/sit efficiency and bench blunders.
   const eff = {};

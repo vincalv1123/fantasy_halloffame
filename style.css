@@ -286,3 +286,23 @@ svg text { font-family: var(--mono); }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .refresh.spin svg { animation: none; } }
 @media (max-width: 420px) { .top .meta { display: none; } }
+
+/* Matchup history */
+.mgrid { display: grid; grid-template-columns: 1fr; gap: 8px; }
+@media (min-width: 640px) { .mgrid { grid-template-columns: 1fr 1fr; } }
+.pgame.mbtn { width: 100%; text-align: left; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.pgame.mbtn:hover, .pgame.mbtn:focus-visible { border-color: var(--line-strong); background: var(--panel); }
+.mhead { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.mhead .name { font-size: 15px; font-weight: 600; }
+.mtable { display: flex; flex-direction: column; }
+.mlabel { text-transform: uppercase; letter-spacing: .05em; font-size: 11px; padding: 10px 0 4px; }
+.mrow { display: grid; grid-template-columns: minmax(0,1fr) 50px 40px 50px minmax(0,1fr); gap: 6px; align-items: center; padding: 7px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.mrow .pl { display: flex; flex-direction: column; min-width: 0; }
+.mrow .pl.r { text-align: right; align-items: flex-end; }
+.mrow .pn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.mrow .pl .note { font-size: 11px; }
+.mrow .num { font-size: 13px; color: var(--muted); }
+.mrow .num.r { text-align: right; }
+.mrow.la .num:not(.r), .mrow.lb .num.r { color: var(--fg); font-weight: 600; }
+.mrow .slot { justify-self: center; font-size: 10px; letter-spacing: .04em; padding: 3px 6px; border-radius: 999px; border: 1px solid var(--line-strong); color: var(--fg-2); }
+.mrow.bn { opacity: .78; }
