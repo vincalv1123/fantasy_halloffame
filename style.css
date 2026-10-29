@@ -70,7 +70,7 @@ h2 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
 .chip.gold { background: var(--gold-bg); border-color: transparent; color: var(--gold); }
 .tag { display: inline-block; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; white-space: nowrap; }
 .tag.gold { background: var(--gold); color: var(--ink); }
-.tag.major { background: rgba(124, 196, 245, 0.16); color: #7CC4F5; }
+.tag.major { background: rgba(232, 176, 75, 0.16); color: var(--gold); }
 .major-t { color: #7CC4F5; }
 .tag.up { background: var(--up-bg); color: var(--up); }
 .tag.down { background: var(--down-bg); color: var(--down); }
