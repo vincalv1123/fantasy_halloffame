@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610290518';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610290518';
-import { buildModel, optimalPoints } from './model.js?v=202610290518';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610290518';
+import { CONFIG } from './config.js?v=202610290522';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610290522';
+import { buildModel, optimalPoints } from './model.js?v=202610290522';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610290522';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -368,11 +368,10 @@ function liveGames(S, week, list) {
   const final = week <= S.scoredThrough;
   return games.map(([a, b]) => {
     const aLead = a.points >= b.points;
-    return `<div class="box"><div class="top-line"><span>Week ${week}</span><span>${final ? 'Final' : 'Live'}</span></div><div class="game">
+    return `<div class="box mclick" data-matchup="${S.season}:${week}:${a.matchup_id}" role="button" tabindex="0" aria-label="Lineups and player stats"><div class="top-line"><span>Week ${week}</span><span>${final ? 'Final' : 'Live'} · tap for lineups</span></div><div class="game">
       <a class="${aLead ? 'lead-t' : 'trail-t'}" href="${mlink(S.ownerOf[a.roster_id])}" style="text-decoration:none">${name(S.ownerOf[a.roster_id])}</a><span class="score">${f2(a.points || 0)}</span>
       <a class="${aLead ? 'trail-t' : 'lead-t'}" href="${mlink(S.ownerOf[b.roster_id])}" style="text-decoration:none">${name(S.ownerOf[b.roster_id])}</a><span class="score">${f2(b.points || 0)}</span></div>
-      ${matchupPreview(S, a.roster_id, b.roster_id, week)}
-      <button type="button" class="linkbtn" data-matchup="${S.season}:${week}:${a.matchup_id}" style="margin-top:8px">Lineups and player stats →</button></div>`;
+      ${matchupPreview(S, a.roster_id, b.roster_id, week)}</div>`;
   }).join('');
 }
 
@@ -1063,7 +1062,16 @@ function openMatchup(key) {
 }
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-matchup]');
-  if (b) { e.preventDefault(); openMatchup(b.dataset.matchup); }
+  if (!b) return;
+  // Links inside a live matchup card (manager names, head-to-head) still go where they point.
+  const link = e.target.closest('a');
+  if (link && b.contains(link)) return;
+  e.preventDefault(); openMatchup(b.dataset.matchup);
+});
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const b = e.target.closest && e.target.closest('.mclick[data-matchup]');
+  if (b && e.target === b) { e.preventDefault(); openMatchup(b.dataset.matchup); }
 });
 
 // ---------- Draft history ----------
