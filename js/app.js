@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610291824';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610291824';
-import { buildModel, optimalPoints } from './model.js?v=202610291824';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610291824';
+import { CONFIG } from './config.js?v=202610291826';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610291826';
+import { buildModel, optimalPoints } from './model.js?v=202610291826';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610291826';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -658,7 +658,7 @@ function awardRow(a, sub) {
     <span class="num" style="font-size:14px">${a.v}</span></div>`;
 }
 function managerSeasonAwards(x) {
-  const mine = seasonAwards(x.S).filter(a => a.rid === x.r).sort((a, b) => awardTier(b) - awardTier(a));
+  const mine = seasonAwards(x.S).filter(a => a.rid === x.r).sort((a, b) => (a.key === 'sacko') - (b.key === 'sacko') || awardTier(b) - awardTier(a));
   const head = `<div class="head"><h2>${x.S.season} awards</h2><span class="note">${x.S.isCurrent ? 'So far this season' : (mine.some(a => a.major) ? mine.filter(a => a.major).length + ' major · ' : '') + mine.filter(a => a.good && !a.major).length + ' good · ' + mine.filter(a => !a.good).length + ' bad'}</span></div>`;
   if (!mine.length) return head + '<p class="lead">No awards this season.</p>';
   return head + `<div class="rows">${mine.map(a => awardRow(a, a.d)).join('')}</div>`;
@@ -667,10 +667,10 @@ function managerCareerAwards(id, list) {
   const won = {};
   list.filter(x => !x.S.isCurrent).forEach(x => seasonAwards(x.S).filter(a => a.rid === x.r).forEach(a => {
     const k = a.key === 'sacko' ? 'Sacko' : a.k;
-    const w = won[k] = won[k] || { k, good: a.good, major: a.major, years: [] };
+    const w = won[k] = won[k] || { k, key: a.key, good: a.good, major: a.major, years: [] };
     w.years.push(x.S.season);
   }));
-  const rows = Object.values(won).sort((a, b) => awardTier(b) - awardTier(a) || b.years.length - a.years.length);
+  const rows = Object.values(won).sort((a, b) => (a.key === 'sacko') - (b.key === 'sacko') || awardTier(b) - awardTier(a) || b.years.length - a.years.length);
   const major = rows.filter(r => r.major).reduce((t, r) => t + r.years.length, 0);
   const good = rows.filter(r => r.good && !r.major).reduce((t, r) => t + r.years.length, 0);
   const bad = rows.filter(r => !r.good).reduce((t, r) => t + r.years.length, 0);
