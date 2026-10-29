@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610290445';
-import { loadAll, loadLiveWeek, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610290445';
-import { buildModel, optimalPoints } from './model.js?v=202610290445';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610290445';
+import { CONFIG } from './config.js?v=202610290447';
+import { loadAll, loadLiveWeek, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610290447';
+import { buildModel, optimalPoints } from './model.js?v=202610290447';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610290447';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -1186,7 +1186,7 @@ function viewAwards() {
   out.push(section(`<div class="head"><h2>Award cabinet</h2><span class="note">Finished seasons</span></div>
     <div class="rows">${rows.map((c, i) => `<a class="row" href="${mlink(c.id)}" style="grid-template-columns:minmax(0,1fr) auto">
       <span class="stack"><span class="name">${name(c.id)}</span><span class="sub">${Object.keys(c.items).map(k => (c.items[k] > 1 ? c.items[k] + '× ' : '') + esc(k)).join(' · ')}</span></span>
-      <span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><span class="tag major">${c.major} major</span><span class="tag ${i === 0 ? 'gold' : 'up'}">${c.good} good</span><span class="tag down">${c.bad} bad</span></span></a>`).join('')}</div>`));
+      <span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><span class="tag major">${c.major} major</span><span class="tag up">${c.good} good</span><span class="tag down">${c.bad} bad</span></span></a>`).join('')}</div>`));
 
   const seen = {};
   bySeason.forEach(({ list }) => list.forEach(a => { seen[a.key] = seen[a.key] || a.k.replace(' watch', ''); }));
