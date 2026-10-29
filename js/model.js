@@ -1,7 +1,7 @@
 // Turns raw Sleeper data into every stat, award and score the site shows.
 // Pure functions only: nothing here touches the page or the network.
 
-import { CONFIG } from './config.js?v=202610291828';
+import { CONFIG } from './config.js?v=202610291835';
 
 const ELIGIBLE = {
   QB: ['QB'], RB: ['RB'], WR: ['WR'], TE: ['TE'], K: ['K'], DEF: ['DEF'],
@@ -634,7 +634,10 @@ export function buildModel(data, format) {
   const newest = seasons.length ? seasons[0].season : null;
 
   // Single-game and streak records.
-  const rec = (label, value, fmt, who, season, week, detail) => ({ label, value, display: fmt(value), who, season, week, detail, isNew: season === newest });
+  // "New record" only while the record was set in the latest finished week; it drops off once the next week is played.
+  const lastWeek = seasons.length ? seasons[0].scoredThrough : null;
+  const isFresh = (season, week) => season === newest && week != null && week === lastWeek;
+  const rec = (label, value, fmt, who, season, week, detail, endWeek) => ({ label, value, display: fmt(value), who, season, week, detail, isNew: isFresh(season, week != null ? week : endWeek) });
   const pts = x => round2(x).toFixed(2).replace(/\.?0+$/, '') ;
   const records = [];
   if (allGames.length) {
@@ -673,8 +676,8 @@ export function buildModel(data, format) {
         });
       });
     });
-    if (bestW) records.push(rec('Longest win streak', bestW.n, String, nameOf(bestW.o), bestW.season, null, 'Weeks ' + bestW.from + '–' + bestW.to));
-    if (bestL) records.push(rec('Longest losing streak', bestL.n, String, nameOf(bestL.o), bestL.season, null, 'Weeks ' + bestL.from + '–' + bestL.to));
+    if (bestW) records.push(rec('Longest win streak', bestW.n, String, nameOf(bestW.o), bestW.season, null, 'Weeks ' + bestW.from + '–' + bestW.to, bestW.to));
+    if (bestL) records.push(rec('Longest losing streak', bestL.n, String, nameOf(bestL.o), bestL.season, null, 'Weeks ' + bestL.from + '–' + bestL.to, bestL.to));
     if (lossHi) records.push({ ...rec('Most pts in a loss', lossHi.p, pts, nameOf(lossHi.o), lossHi.g.season, lossHi.g.week), owner: lossHi.o });
     if (winLo) records.push({ ...rec('Fewest pts in a win', winLo.p, pts, nameOf(winLo.o), winLo.g.season, winLo.g.week), owner: winLo.o });
   }
