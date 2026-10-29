@@ -329,3 +329,6 @@ svg text { font-family: var(--mono); }
 .row.meet.head-row span:nth-child(n+3) { text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pgame.flash { border-color: var(--fg-2); background: var(--panel); }
 .row.meet.rowbtn:hover { background: var(--panel); }
+/* Only the name itself links to the profile; the rest of the card opens the lineups. */
+.game > a { justify-self: start; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.game > a:hover { text-decoration: underline !important; text-underline-offset: 3px; }
