@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610290447';
-import { loadAll, loadLiveWeek, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610290447';
-import { buildModel, optimalPoints } from './model.js?v=202610290447';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610290447';
+import { CONFIG } from './config.js?v=202610290448';
+import { loadAll, loadLiveWeek, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610290448';
+import { buildModel, optimalPoints } from './model.js?v=202610290448';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610290448';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -1180,12 +1180,13 @@ function viewAwards() {
     const id = S.ownerOf[a.rid];
     const c = cab[id] = cab[id] || { id, major: 0, good: 0, bad: 0, items: {} };
     if (a.major) c.major++; else if (a.good) c.good++; else c.bad++;
-    c.items[a.k] = (c.items[a.k] || 0) + 1;
+    const it = c.items[a.k] = c.items[a.k] || { n: 0, tier: awardTier(a) };
+    it.n++;
   }));
   const rows = Object.values(cab).sort((a, b) => b.major - a.major || b.good - a.good || a.bad - b.bad);
   out.push(section(`<div class="head"><h2>Award cabinet</h2><span class="note">Finished seasons</span></div>
     <div class="rows">${rows.map((c, i) => `<a class="row" href="${mlink(c.id)}" style="grid-template-columns:minmax(0,1fr) auto">
-      <span class="stack"><span class="name">${name(c.id)}</span><span class="sub">${Object.keys(c.items).map(k => (c.items[k] > 1 ? c.items[k] + '× ' : '') + esc(k)).join(' · ')}</span></span>
+      <span class="stack"><span class="name">${name(c.id)}</span><span class="sub">${Object.keys(c.items).sort((x, y) => c.items[y].tier - c.items[x].tier).map(k => `<span class="${['down', 'up', 'major-t'][c.items[k].tier]}">${(c.items[k].n > 1 ? c.items[k].n + '× ' : '') + esc(k)}</span>`).join(' · ')}</span></span>
       <span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><span class="tag major">${c.major} major</span><span class="tag up">${c.good} good</span><span class="tag down">${c.bad} bad</span></span></a>`).join('')}</div>`));
 
   const seen = {};
