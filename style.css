@@ -332,3 +332,9 @@ svg text { font-family: var(--mono); }
 /* Only the name itself links to the profile; the rest of the card opens the lineups. */
 .game > a { justify-self: start; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .game > a:hover { text-decoration: underline !important; text-underline-offset: 3px; }
+/* Head-to-head meetings: playoff games silver, title games gold */
+.row.meet { grid-template-columns: 52px 112px minmax(0,1fr) minmax(0,1fr); }
+.row.meet.po { box-shadow: inset 3px 0 0 #C3CCD1; background: rgba(195, 204, 209, 0.07); padding-left: 10px; }
+.row.meet.po .year, .row.meet.po .note { color: #C3CCD1; }
+.row.meet.champ { box-shadow: inset 3px 0 0 var(--gold); background: rgba(232, 176, 75, 0.09); padding-left: 10px; }
+.row.meet.champ .year, .row.meet.champ .note { color: var(--gold); }

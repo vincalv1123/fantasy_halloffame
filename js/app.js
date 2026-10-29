@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610290534';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610290534';
-import { buildModel, optimalPoints } from './model.js?v=202610290534';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610290534';
+import { CONFIG } from './config.js?v=202610290537';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610290537';
+import { buildModel, optimalPoints } from './model.js?v=202610290537';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610290537';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -773,10 +773,12 @@ function viewCompare(a, b) {
     const S = seasonOf(m.season);
     const g = S ? weekGames(S, m.week).find(x => (S.ownerOf[x.a] === a && S.ownerOf[x.b] === b) || (S.ownerOf[x.a] === b && S.ownerOf[x.b] === a)) : null;
     const aw = m.mine > m.theirs; const bw = m.theirs > m.mine;
-    const cells = `<span class="year">${m.season}</span><span class="note">Week ${m.week}</span>
+    const champ = g && g.label === 'Championship'; const po = m.playoff || (g && g.label && g.label !== 'Consolation' && g.label !== 'Toilet bowl');
+    const tier = champ ? ' champ' : po ? ' po' : '';
+    const cells = `<span class="year">${m.season}</span><span class="note">Week ${m.week}${champ ? ' · Title' : po ? ' · Playoffs' : ''}</span>
       <span class="num${aw ? ' win' : ''}">${f2(m.mine)}</span><span class="num${bw ? ' win' : ''}">${f2(m.theirs)}</span>`;
-    return g ? `<button type="button" class="row meet rowbtn" data-matchup="${m.season}:${m.week}:${g.mid}">${cells}</button>`
-      : `<a class="row meet" href="${PX}matchups@${m.season}@${m.week}">${cells}</a>`;
+    return g ? `<button type="button" class="row meet rowbtn${tier}" data-matchup="${m.season}:${m.week}:${g.mid}">${cells}</button>`
+      : `<a class="row meet${tier}" href="${PX}matchups@${m.season}@${m.week}">${cells}</a>`;
   });
   out.push(section(`<div class="head"><h2>All meetings</h2><span class="note">${r.games} game${r.games === 1 ? '' : 's'} · tap one for lineups and stats</span></div>
     ${meetings.length ? `<div class="rows"><div class="row meet head-row"><span>Year</span><span>Week</span><span>${name(a)}</span><span>${name(b)}</span></div>${meetings.join('')}</div>` : '<p class="lead">These two have never played each other.</p>'}`));
