@@ -376,7 +376,7 @@ button.tile.tbtn { background: none; color: inherit; font: inherit; text-align: 
 button.tile.tbtn:hover, button.tile.tbtn:focus-visible { background: var(--panel); outline: none; }
 
 /* Award cabinet: the Sacko is black and always listed last */
-.sacko-t { display: inline-block; background: #5C3F27; color: #F3E4D3; border: 1px solid #8A6342; border-radius: 999px; padding: 0 7px; line-height: 1.5; }
+.sacko-t { color: #B4855E; }
 
 /* Bad awards are brown */
 .bad-t { color: var(--down); }
