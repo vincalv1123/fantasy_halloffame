@@ -382,4 +382,9 @@ button.tile.tbtn:hover, button.tile.tbtn:focus-visible { background: var(--panel
 .bad-t { color: var(--down); }
 .tag.bad { background: rgba(240, 144, 122, 0.16); color: var(--down); }
 .sacko-t2 { color: #B4855E; }
-.calc.trades-dd summary { font-size: 18px; font-weight: 600; min-height: 56px; }
+.calc.trades-dd { border: 0; border-radius: 0; margin: 0; }
+.calc.trades-dd > summary { padding: 0; min-height: 0; justify-content: flex-start; gap: 10px; font-size: inherit; font-weight: inherit; }
+.calc.trades-dd > summary h2 { margin: 0; }
+.calc.trades-dd > summary::after { margin-left: 4px; }
+.calc.trades-dd[open] > summary { border-bottom: 0; }
+.calc.trades-dd > .calc-body { padding: 14px 0 0; }

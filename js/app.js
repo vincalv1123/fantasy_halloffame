@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610291835';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610291835';
-import { buildModel, optimalPoints } from './model.js?v=202610291835';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610291835';
+import { CONFIG } from './config.js?v=202610291840';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610291840';
+import { buildModel, optimalPoints } from './model.js?v=202610291840';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610291840';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -484,7 +484,7 @@ function viewSeason(S) {
   if (S.picks.length && LG.format !== 'dynasty') out.push(section(teamGradesSection(S, draftTeamGrades(S), S.season + ' draft grades') + `<a class="btn" href="${PX}drafts@${S.season}">Full ${S.season} draft →</a>`));
 
   if (S.trades.length) {
-    out.push(section(`<details class="calc trades-dd"><summary><span>Trades <span class="note" style="font-weight:400">· ${S.trades.length} trade${S.trades.length > 1 ? 's' : ''}</span></span></summary><div class="calc-body">
+    out.push(section(`<details class="calc trades-dd"><summary><h2>Trades</h2><span class="note">${S.trades.length} trade${S.trades.length > 1 ? 's' : ''}</span></summary><div class="calc-body">
       <span class="note">${LG.format === 'dynasty' ? 'Starter pts since the trade, all seasons' : 'Starter pts for the rest of the season'} · tap a trade for both sides</span>
       <div style="display:flex;flex-direction:column;gap:10px">${S.trades.slice().reverse().map(t => `<button type="button" class="box tradebtn"${tradeAttr(t)}><div class="top-line"><span>Week ${t.week}</span><span>Tap for details</span></div>
       ${t.sides.map(s => `<div class="line2"><span style="font-size:14px;min-width:0"><span style="font-weight:500">${nm(s.rid)}</span>
