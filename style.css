@@ -346,9 +346,9 @@ svg text { font-family: var(--mono); }
 .calc.aw-good { border-color: rgba(95, 199, 155, 0.35); }
 .calc.aw-good summary { color: var(--up); }
 .calc.aw-good .dot { background: var(--up); }
-.calc.aw-bad { border-color: rgba(240, 144, 122, 0.35); }
-.calc.aw-bad summary { color: var(--down); }
-.calc.aw-bad .dot { background: var(--down); }
+.calc.aw-bad { border-color: rgba(180, 133, 94, 0.45); }
+.calc.aw-bad summary { color: #B4855E; }
+.calc.aw-bad .dot { background: #B4855E; }
 .calc.aw-major .calc-body, .calc.aw-good .calc-body, .calc.aw-bad .calc-body { color: var(--fg); }
 
 /* Head-to-head grid: every box opens that matchup */
@@ -373,3 +373,7 @@ button.tile.tbtn:hover, button.tile.tbtn:focus-visible { background: var(--panel
 
 /* Award cabinet: the Sacko is black and always listed last */
 .sacko-t { display: inline-block; background: #000; color: #E9ECEB; border: 1px solid #3A4549; border-radius: 999px; padding: 0 7px; line-height: 1.5; }
+
+/* Bad awards are brown */
+.bad-t { color: #B4855E; }
+.tag.bad { background: rgba(180, 133, 94, 0.18); color: #C79A72; }

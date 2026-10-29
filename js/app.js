@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610291814';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610291814';
-import { buildModel, optimalPoints } from './model.js?v=202610291814';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610291814';
+import { CONFIG } from './config.js?v=202610291818';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610291818';
+import { buildModel, optimalPoints } from './model.js?v=202610291818';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610291818';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -390,7 +390,7 @@ function seasonAwards(S) {
   const ranked = S.rids.slice().sort((a, b) => S.scores[b].total - S.scores[a].total);
   if (ranked.length) {
     aw.push({ key: 'bestMgr', k: 'Best manager', rid: ranked[0], v: String(Math.round(S.scores[ranked[0]].total)), d: 'Highest Manager Score', cls: 'gold-t', good: true, major: true });
-    aw.push({ key: 'worstMgr', k: 'Worst manager', rid: ranked[ranked.length - 1], v: String(Math.round(S.scores[ranked[ranked.length - 1]].total)), d: 'Lowest Manager Score', cls: 'down', good: false });
+    aw.push({ key: 'worstMgr', k: 'Worst manager', rid: ranked[ranked.length - 1], v: String(Math.round(S.scores[ranked[ranked.length - 1]].total)), d: 'Lowest Manager Score', cls: 'bad-t', good: false });
   }
   const wk = S.rids.slice().sort((a, b) => S.waivers[b].pts - S.waivers[a].pts)[0];
   if (wk != null) {
@@ -401,21 +401,21 @@ function seasonAwards(S) {
   S.trades.forEach(t => t.sides.forEach(x => { if (!toy || x.net > toy.s.net) toy = { t, s: x }; }));
   if (toy && toy.s.net > 0) aw.push({ key: 'trade', k: 'Trade of the Year', rid: toy.s.rid, v: signed(toy.s.net), d: 'Week ' + toy.t.week + ' · got ' + (toy.s.got.map(g => player(g.pid)).join(', ') || 'picks'), cls: 'gold-t', good: true });
   if (S.steal) aw.push({ key: 'steal', k: 'Steal of the Draft', rid: S.steal.roster_id, v: 'R' + S.steal.round + ' → ' + esc(S.steal.pos) + S.posRank[S.steal.player_id], d: player(S.steal.player_id) + ', round ' + S.steal.round + ', finished ' + esc(S.steal.pos) + S.posRank[S.steal.player_id] + (S.isCurrent ? ' so far' : ''), cls: 'gold-t', good: true });
-  if (S.bust) aw.push({ key: 'bust', k: 'Bust of the Draft', rid: S.bust.roster_id, v: 'R' + S.bust.round + ' → ' + esc(S.bust.pos) + (S.posRank[S.bust.player_id] || '—'), d: player(S.bust.player_id) + ', round ' + S.bust.round + (S.posRank[S.bust.player_id] ? ', finished ' + esc(S.bust.pos) + S.posRank[S.bust.player_id] : ', barely played') + (S.isCurrent ? ' so far' : ''), cls: 'down', good: false });
+  if (S.bust) aw.push({ key: 'bust', k: 'Bust of the Draft', rid: S.bust.roster_id, v: 'R' + S.bust.round + ' → ' + esc(S.bust.pos) + (S.posRank[S.bust.player_id] || '—'), d: player(S.bust.player_id) + ', round ' + S.bust.round + (S.posRank[S.bust.player_id] ? ', finished ' + esc(S.bust.pos) + S.posRank[S.bust.player_id] : ', barely played') + (S.isCurrent ? ' so far' : ''), cls: 'bad-t', good: false });
   const hi = S.weeklyHighs[0];
   if (hi) aw.push({ key: 'highScore', k: 'Highest score', rid: hi.rid, v: f2(hi.pts), d: 'Week ' + hi.week, cls: 'gold-t', good: true });
   const byLuck = S.standings.slice().sort((a, b) => b.luck - a.luck);
   if (byLuck.length > 1) {
     aw.push({ key: 'luckiest', k: 'Luckiest', rid: byLuck[0].rid, v: signed(byLuck[0].luck), d: 'Wins above expected', cls: 'up', good: true });
-    aw.push({ key: 'unluckiest', k: 'Unluckiest', rid: byLuck[byLuck.length - 1].rid, v: signed(byLuck[byLuck.length - 1].luck), d: 'Wins below expected', cls: 'down', good: false });
+    aw.push({ key: 'unluckiest', k: 'Unluckiest', rid: byLuck[byLuck.length - 1].rid, v: signed(byLuck[byLuck.length - 1].luck), d: 'Wins below expected', cls: 'bad-t', good: false });
   }
   if (S.benchBlunder && S.benchBlunder.gap > 0) {
     const b = S.benchBlunder;
-    aw.push({ key: 'blunder', k: 'Bench Blunder', rid: b.rid, v: f1(b.gap) + ' pts', d: 'Week ' + b.week + ' points left on the bench' + (b.wouldHaveWon ? ' · would have won' : b.lostBy != null ? ' · lost by ' + f1(b.lostBy) : ''), cls: 'down', good: false });
+    aw.push({ key: 'blunder', k: 'Bench Blunder', rid: b.rid, v: f1(b.gap) + ' pts', d: 'Week ' + b.week + ' points left on the bench' + (b.wouldHaveWon ? ' · would have won' : b.lostBy != null ? ' · lost by ' + f1(b.lostBy) : ''), cls: 'bad-t', good: false });
   }
   const lastR = S.lastPlace != null ? S.st[S.lastPlace] : S.standings[S.standings.length - 1];
   aw.push({ key: 'sacko', k: S.isCurrent ? 'Sacko watch' : 'Sacko', rid: lastR.rid, v: wl(lastR.wins, lastR.losses, lastR.ties),
-    d: (S.isCurrent ? 'Worst record so far · ' : S.toiletBowl ? 'Lost the toilet bowl · ' : 'Last place · ') + comma(lastR.pf) + ' PF', cls: 'down', good: false });
+    d: (S.isCurrent ? 'Worst record so far · ' : S.toiletBowl ? 'Lost the toilet bowl · ' : 'Last place · ') + comma(lastR.pf) + ' PF', cls: 'bad-t', good: false });
   return aw;
 }
 
@@ -648,8 +648,8 @@ function breakdown(title, parts) {
 }
 
 // Awards a manager won in one season, and across a career.
-// Major awards (champion, regular-season champ, best manager) are gold; other good awards green; bad ones red.
-const awardColor = a => (a.major ? GOLD : a.good ? '#5FC79B' : '#F0907A');
+// Major awards (champion, regular-season champ, best manager) are gold; other good awards green; bad ones brown.
+const awardColor = a => (a.major ? GOLD : a.good ? '#5FC79B' : '#B4855E');
 const awardTier = a => (a.major ? 2 : a.good ? 1 : 0);
 function awardRow(a, sub) {
   return `<div class="row" style="grid-template-columns:22px minmax(0,1fr) auto;padding:12px 0">
@@ -677,7 +677,7 @@ function managerCareerAwards(id, list) {
   const cur = list.find(x => x.S.isCurrent);
   const curAw = cur ? seasonAwards(cur.S).filter(a => a.rid === cur.r) : [];
   let html = `<div class="head"><h2>Career awards</h2><span class="note">Finished seasons</span></div>
-    <div class="cards"><div class="card"><span class="k gold-t">Major awards</span><span class="v">${major}</span></div><div class="card"><span class="k up">Good awards</span><span class="v">${good}</span></div><div class="card"><span class="k down">Bad awards</span><span class="v">${bad}</span></div></div>`;
+    <div class="cards"><div class="card"><span class="k gold-t">Major awards</span><span class="v">${major}</span></div><div class="card"><span class="k up">Good awards</span><span class="v">${good}</span></div><div class="card"><span class="k bad-t">Bad awards</span><span class="v">${bad}</span></div></div>`;
   html += rows.length ? `<div class="rows">${rows.map(r => awardRow({ ...r, v: r.years.length > 1 ? '×' + r.years.length : '' }, r.years.sort().reverse().join(', '))).join('')}</div>` : '<p class="lead">No awards yet.</p>';
   if (curAw.length) html += `<p class="note" style="margin:0">On track in ${cur.S.season}: ${curAw.map(a => esc(a.k)).join(', ')}. These count once the season ends.</p>`;
   return html;
@@ -1295,8 +1295,8 @@ function viewAwards() {
   const rows = Object.values(cab).sort((a, b) => b.major - a.major || b.good - a.good || a.bad - b.bad);
   out.push(section(`<div class="head"><h2>Award cabinet</h2><span class="note">Finished seasons</span></div>
     <div class="rows">${rows.map((c, i) => `<a class="row" href="${mlink(c.id)}" style="grid-template-columns:minmax(0,1fr) auto">
-      <span class="stack"><span class="name">${name(c.id)}</span><span class="sub">${Object.keys(c.items).sort((x, y) => (c.items[x].sacko - c.items[y].sacko) || c.items[y].tier - c.items[x].tier).map(k => `<span class="${c.items[k].sacko ? 'sacko-t' : ['down', 'up', 'gold-t'][c.items[k].tier]}">${(c.items[k].n > 1 ? c.items[k].n + '× ' : '') + esc(k)}</span>`).join(' · ')}</span></span>
-      <span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><span class="tag major">${c.major} major</span><span class="tag up">${c.good} good</span><span class="tag down">${c.bad} bad</span></span></a>`).join('')}</div>`));
+      <span class="stack"><span class="name">${name(c.id)}</span><span class="sub">${Object.keys(c.items).sort((x, y) => (c.items[x].sacko - c.items[y].sacko) || c.items[y].tier - c.items[x].tier).map(k => `<span class="${c.items[k].sacko ? 'sacko-t' : ['bad-t', 'up', 'gold-t'][c.items[k].tier]}">${(c.items[k].n > 1 ? c.items[k].n + '× ' : '') + esc(k)}</span>`).join(' · ')}</span></span>
+      <span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><span class="tag major">${c.major} major</span><span class="tag up">${c.good} good</span><span class="tag bad">${c.bad} bad</span></span></a>`).join('')}</div>`));
 
   const seen = {};
   bySeason.forEach(({ list }) => list.forEach(a => { seen[a.key] = seen[a.key] || a.k.replace(' watch', ''); }));
