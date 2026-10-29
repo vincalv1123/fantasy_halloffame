@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610291606';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610291606';
-import { buildModel, optimalPoints } from './model.js?v=202610291606';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610291606';
+import { CONFIG } from './config.js?v=202610291648';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610291648';
+import { buildModel, optimalPoints } from './model.js?v=202610291648';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610291648';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -383,13 +383,13 @@ const SEASON_TILE_AWARDS = ['waiver', 'trade', 'steal', 'bust', 'blunder', 'sack
 function seasonAwards(S) {
   const aw = [];
   const done = !S.isCurrent;
-  if (S.champion) aw.push({ key: 'champion', k: 'Champion', rid: S.champion, v: wl(S.st[S.champion].wins, S.st[S.champion].losses, S.st[S.champion].ties), d: 'Won the title', cls: 'major-t', good: true, major: true });
+  if (S.champion) aw.push({ key: 'champion', k: 'Champion', rid: S.champion, v: wl(S.st[S.champion].wins, S.st[S.champion].losses, S.st[S.champion].ties), d: 'Won the title', cls: 'gold-t', good: true, major: true });
   if (S.runnerUp) aw.push({ key: 'runnerUp', k: 'Runner-up', rid: S.runnerUp, v: wl(S.st[S.runnerUp].wins, S.st[S.runnerUp].losses, S.st[S.runnerUp].ties), d: 'Lost the final', cls: '', good: true });
   const top = S.standings[0];
-  if (top && done) aw.push({ key: 'regSeason', k: 'Regular-season champ', rid: top.rid, v: wl(top.wins, top.losses, top.ties), d: comma(top.pf) + ' PF · No. 1 seed', cls: 'major-t', good: true, major: true });
+  if (top && done) aw.push({ key: 'regSeason', k: 'Regular-season champ', rid: top.rid, v: wl(top.wins, top.losses, top.ties), d: comma(top.pf) + ' PF · No. 1 seed', cls: 'gold-t', good: true, major: true });
   const ranked = S.rids.slice().sort((a, b) => S.scores[b].total - S.scores[a].total);
   if (ranked.length) {
-    aw.push({ key: 'bestMgr', k: 'Best manager', rid: ranked[0], v: String(Math.round(S.scores[ranked[0]].total)), d: 'Highest Manager Score', cls: 'major-t', good: true, major: true });
+    aw.push({ key: 'bestMgr', k: 'Best manager', rid: ranked[0], v: String(Math.round(S.scores[ranked[0]].total)), d: 'Highest Manager Score', cls: 'gold-t', good: true, major: true });
     aw.push({ key: 'worstMgr', k: 'Worst manager', rid: ranked[ranked.length - 1], v: String(Math.round(S.scores[ranked[ranked.length - 1]].total)), d: 'Lowest Manager Score', cls: 'down', good: false });
   }
   const wk = S.rids.slice().sort((a, b) => S.waivers[b].pts - S.waivers[a].pts)[0];
@@ -648,9 +648,8 @@ function breakdown(title, parts) {
 }
 
 // Awards a manager won in one season, and across a career.
-// Major awards (champion, regular-season champ, best manager) are blue; other good awards gold; bad ones red.
-const MAJOR_BLUE = '#7CC4F5';
-const awardColor = a => (a.major ? MAJOR_BLUE : a.good ? GOLD : '#F0907A');
+// Major awards (champion, regular-season champ, best manager) are gold; other good awards green; bad ones red.
+const awardColor = a => (a.major ? GOLD : a.good ? '#5FC79B' : '#F0907A');
 const awardTier = a => (a.major ? 2 : a.good ? 1 : 0);
 function awardRow(a, sub) {
   return `<div class="row" style="grid-template-columns:22px minmax(0,1fr) auto;padding:12px 0">
@@ -678,7 +677,7 @@ function managerCareerAwards(id, list) {
   const cur = list.find(x => x.S.isCurrent);
   const curAw = cur ? seasonAwards(cur.S).filter(a => a.rid === cur.r) : [];
   let html = `<div class="head"><h2>Career awards</h2><span class="note">Finished seasons</span></div>
-    <div class="cards"><div class="card"><span class="k major-t">Major awards</span><span class="v">${major}</span></div><div class="card"><span class="k gold-t">Good awards</span><span class="v">${good}</span></div><div class="card"><span class="k down">Bad awards</span><span class="v">${bad}</span></div></div>`;
+    <div class="cards"><div class="card"><span class="k gold-t">Major awards</span><span class="v">${major}</span></div><div class="card"><span class="k up">Good awards</span><span class="v">${good}</span></div><div class="card"><span class="k down">Bad awards</span><span class="v">${bad}</span></div></div>`;
   html += rows.length ? `<div class="rows">${rows.map(r => awardRow({ ...r, v: r.years.length > 1 ? '×' + r.years.length : '' }, r.years.sort().reverse().join(', '))).join('')}</div>` : '<p class="lead">No awards yet.</p>';
   if (curAw.length) html += `<p class="note" style="margin:0">On track in ${cur.S.season}: ${curAw.map(a => esc(a.k)).join(', ')}. These count once the season ends.</p>`;
   return html;
