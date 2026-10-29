@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610290448';
-import { loadAll, loadLiveWeek, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610290448';
-import { buildModel, optimalPoints } from './model.js?v=202610290448';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610290448';
+import { CONFIG } from './config.js?v=202610290451';
+import { loadAll, loadLiveWeek, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610290451';
+import { buildModel, optimalPoints } from './model.js?v=202610290451';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610290451';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -103,7 +103,7 @@ function openTrade(i) {
   if (!dlg) {
     dlg = document.createElement('dialog');
     dlg.id = 'trade-modal';
-    dlg.className = 'modal';
+    dlg.className = 'modal trade';
     dlg.setAttribute('aria-labelledby', 'trade-title');
     document.body.appendChild(dlg);
     dlg.addEventListener('click', e => { if (e.target === dlg || e.target.closest('[data-close]')) dlg.close(); });
@@ -112,14 +112,14 @@ function openTrade(i) {
   dlg.innerHTML = `<div class="modal-card">
     <div class="line2" style="align-items:center"><h2 id="trade-title" style="font-size:18px">Trade · ${t.season} Week ${t.week}</h2>
       <button type="button" class="close" data-close aria-label="Close">✕</button></div>
-    ${t.sides.map(s => { const id = ownerOf(s);
+    <div class="tsides">${t.sides.map(s => { const id = ownerOf(s);
       return `<div class="side"><div class="line2"><a class="name" href="${mlink(id)}" style="text-decoration:none" data-close>${name(id)}</a>
         <span class="num ${sign(s.net)}" style="font-size:16px">${signed(s.net)}</span></div>
         <span class="note" style="text-transform:uppercase;letter-spacing:.05em;font-size:11px">Received</span>
         <div class="rows">${s.got.map(g => `<div class="row" style="grid-template-columns:minmax(0,1fr) auto;padding:9px 0">
             <span style="font-size:14px">${player(g.pid)} <span class="note">${esc(M.playerPos(g.pid))}</span></span><span class="num" style="font-size:13px">${f1(g.pts)} pts</span></div>`).join('')}
           ${(s.picks || []).map(d => `<div class="row" style="grid-template-columns:minmax(0,1fr) auto;padding:9px 0"><span style="font-size:14px">${pickLabel(d)}</span><span class="note">pick</span></div>`).join('')}
-          ${!s.got.length && !(s.picks || []).length ? '<p class="note" style="margin:8px 0 0">Nothing on record (FAAB or other).</p>' : ''}</div></div>`; }).join('')}
+          ${!s.got.length && !(s.picks || []).length ? '<p class="note" style="margin:8px 0 0">Nothing on record (FAAB or other).</p>' : ''}</div></div>`; }).join('')}</div>
     <p class="note" style="margin:0">Pts = starter points each player scored for his new team after the trade${dynasty ? ', including later seasons while he stayed' : ', rest of that season'}. The number by each name is the net. Picks count as 0.</p>
   </div>`;
   if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');

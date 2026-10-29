@@ -308,3 +308,10 @@ svg text { font-family: var(--mono); }
 .mrow.la .num:not(.r), .mrow.lb .num.r { color: var(--fg); font-weight: 600; }
 .mrow .slot { justify-self: center; font-size: 10px; letter-spacing: .04em; padding: 3px 6px; border-radius: 999px; border: 1px solid var(--line-strong); color: var(--fg-2); }
 .mrow.bn { opacity: .78; }
+
+/* Trade pop-up: sides next to each other on wider screens */
+.tsides { display: flex; flex-direction: column; gap: 16px; }
+@media (min-width: 720px) {
+  .modal.trade { max-width: min(820px, calc(100vw - 48px)); }
+  .tsides { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; }
+}
