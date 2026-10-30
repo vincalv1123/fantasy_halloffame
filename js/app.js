@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610300534';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610300534';
-import { buildModel, optimalPoints } from './model.js?v=202610300534';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610300534';
+import { CONFIG } from './config.js?v=202610300544';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610300544';
+import { buildModel, optimalPoints } from './model.js?v=202610300544';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610300544';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -1211,22 +1211,23 @@ const KIND_LABEL = { rookie: 'Rookie draft', startup: 'Startup draft', supplemen
 const dynKey = C => C.season + '-' + C.kind;
 const MULTI = 3; // a multi-hit = starter-level finishes in this many seasons or more
 const isMulti = p => p.hitYears.length >= MULTI;
-const hitMark = p => (!p.hit ? '' : `<span class="up" title="Starter-level in ${p.hitYears.join(', ')}">✓${p.hitYears.length > 1 ? '<span class="note" style="color:inherit"> ×' + p.hitYears.length + '</span>' : ''}</span>`);
+const hitMark = p => (!p.hit ? '' : `<span class="up" title="Starter-level in ${p.hitYears.join(', ')}">✓${p.hitYears.length > 1 ? '<span class="note" style="color:inherit"> ×' + p.hitYears.length + '</span>' : ''}</span>`) + (p.elite ? ` <span class="gold-t" title="Elite (top-tier finish) in ${p.eliteYears.join(', ')}">★${p.eliteYears.length > 1 ? '×' + p.eliteYears.length : ''}</span>` : '');
 const confidence = C => (C.years <= 1 ? 'Early · year 1' : C.years === 2 ? 'Settling · year 2' : 'Final · year ' + C.years);
 const pickLabel = (C, p) => p.round + '.' + String(p.slot).padStart(2, '0');
-const yearCells = (C, p) => p.byYear.map((v, i) => `<td style="color:${v > 0 ? '#F1F4F3' : '#6B7B7E'}">${v > 0 ? '+' + Math.round(v) : '0'}</td>`).join('');
+const yearCells = (C, p) => p.byYear.map((v, i) => { const el = p.eliteYears && p.eliteYears.indexOf(String(Number(C.season) + i)) >= 0;
+  return `<td style="color:${el ? '#E8B04B' : v > 0 ? '#F1F4F3' : '#6B7B7E'}">${v > 0 ? '+' + Math.round(v) : '0'}${el ? '★' : ''}</td>`; }).join('');
 const yearHeads = C => Array.from({ length: C.years }, (_, i) => `<th title="${Number(C.season) + i}">Y${i + 1}</th>`).join('');
 
 function dynTeamRows(C) {
   return `<div class="rows">${C.teams_.map(t => { const g = gradeOf(t.z); const best = t.picks.slice().sort((x, y) => y.value - x.value)[0];
     return `<button type="button" class="row rowbtn" data-dyn-team="${dynKey(C)}:${t.r}" style="grid-template-columns:40px minmax(0,1fr) auto">
       <span class="grade" style="background:${GRADE_COLORS[g]}">${g}</span>
-      <span class="stack"><span class="name" style="font-size:15px">${name(t.owner)}</span><span class="sub">${t.hits} of ${t.picks.length} hit${t.picks.filter(isMulti).length ? ' · ' + t.picks.filter(isMulti).length + ' multi-hit' : ''}${best ? ' · best: ' + player(best.player_id) + ' (' + pickLabel(C, best) + ')' : ''}</span></span>
+      <span class="stack"><span class="name" style="font-size:15px">${name(t.owner)}</span><span class="sub">${t.hits} of ${t.picks.length} hit${t.picks.filter(isMulti).length ? ' · ' + t.picks.filter(isMulti).length + ' multi-hit' : ''}${t.picks.filter(p => p.elite).length ? ' · ' + t.picks.filter(p => p.elite).length + ' elite' : ''}${best ? ' · best: ' + player(best.player_id) + ' (' + pickLabel(C, best) + ')' : ''}</span></span>
       <span class="num ${sign(t.value)}" style="font-size:15px">${signed(t.value, 0)}</span></button>`; }).join('')}</div>`;
 }
 
 function dynExplainer(C) {
-  return `<span class="note">Value = each player's points above a replacement-level starter at his position, added up over every season since the draft (a season never counts below 0). It's compared with ${C.basis === 'history' ? 'what picks near the same slot produced after the same number of seasons in this league\'s earlier ' + KIND_LABEL[C.kind].toLowerCase() + 's' : 'the picks around it in this draft (not enough earlier ' + KIND_LABEL[C.kind].toLowerCase() + 's yet to compare against)'}. Misses count more early (1.5× in round 1) and less late. A <b>hit</b> = a starter-level finish at his position in any season. Grades firm up each year: early, settling, then final from year 3.</span>`;
+  return `<span class="note">Value = each player's points above a replacement-level starter at his position in every season since the draft (never below 0), with elite seasons multiplied (up to ×2) and later seasons counting a little less. It's compared with ${C.basis === 'history' ? 'what picks near the same slot produced after the same number of seasons in this league\'s earlier ' + KIND_LABEL[C.kind].toLowerCase() + 's' : 'the picks around it in this draft (not enough earlier ' + KIND_LABEL[C.kind].toLowerCase() + 's yet to compare against)'}. Misses count more early (1.5× in round 1) and less late. A <b>hit</b> = a starter-level finish at his position in any season. Grades firm up each year: early, settling, then final from year 3.</span>`;
 }
 
 function viewDynDrafts(sel) {
@@ -1245,10 +1246,10 @@ function viewDynDrafts(sel) {
     // Hit rate by round
     const rounds = [...new Set(C.picks.map(p => p.round))].sort((x, y) => x - y);
     out.push(section(`<div class="head"><h2>Hit rate by round</h2><span class="note">Starter-level finish in any season</span></div>
-      <div class="scroll"><table class="table"><thead><tr><th style="text-align:left">Round</th><th>Picks</th><th>Hits</th><th>Hit rate</th><th>Multi-hits</th><th>Avg value</th></tr></thead><tbody>
+      <div class="scroll"><table class="table"><thead><tr><th style="text-align:left">Round</th><th>Picks</th><th>Hits</th><th>Hit rate</th><th>Multi-hits</th><th>Elite</th><th>Avg value</th></tr></thead><tbody>
       ${rounds.map(rd => { const ps = C.picks.filter(p => p.round === rd); const h = ps.filter(p => p.hit).length;
-        return `<tr><td class="t">Round ${rd}</td><td>${ps.length}</td><td>${h}</td><td>${Math.round(h / ps.length * 100)}%</td><td>${ps.filter(isMulti).length} <span class="note">(${Math.round(ps.filter(isMulti).length / ps.length * 100)}%)</span></td><td style="color:#C9D3D2">${f1(ps.reduce((t, p) => t + p.total, 0) / ps.length)}</td></tr>`; }).join('')}</tbody></table></div>
-      <span class="note">Hit = a starter-level season at his position. Multi-hit = ${MULTI} or more starter-level seasons${C.years < MULTI ? ' (this draft has only ' + C.years + ' season' + (C.years === 1 ? '' : 's') + ' so far, so none are possible yet)' : ''}.</span>`));
+        return `<tr><td class="t">Round ${rd}</td><td>${ps.length}</td><td>${h}</td><td>${Math.round(h / ps.length * 100)}%</td><td>${ps.filter(isMulti).length} <span class="note">(${Math.round(ps.filter(isMulti).length / ps.length * 100)}%)</span></td><td>${ps.filter(p => p.elite).length} <span class="note">(${Math.round(ps.filter(p => p.elite).length / ps.length * 100)}%)</span></td><td style="color:#C9D3D2">${f1(ps.reduce((t, p) => t + p.total, 0) / ps.length)}</td></tr>`; }).join('')}</tbody></table></div>
+      <span class="note">Hit = a starter-level season at his position. Multi-hit = ${MULTI} or more starter-level seasons. Elite ★ = a top-tier finish (about top 6 at his position) in a season${C.years < MULTI ? ' (this draft has only ' + C.years + ' season' + (C.years === 1 ? '' : 's') + ' so far, so none are possible yet)' : ''}.</span>`));
     // Multi-hit players
     const multis = C.picks.filter(isMulti).sort((x, y) => y.hitYears.length - x.hitYears.length || y.total - x.total);
     if (C.years >= MULTI) out.push(ddSection('Multi-hits', multis.length + ' player' + (multis.length === 1 ? '' : 's') + ' with ' + MULTI + '+ starter seasons', multis.length ? `<div class="rows">${multis.map(p => `<div class="row" style="grid-template-columns:52px minmax(0,1fr) auto;padding:11px 0"><span class="num note">${pickLabel(C, p)}</span>
@@ -1270,15 +1271,16 @@ function viewDynDrafts(sel) {
   const rookie = C0.filter(x => x.kind === 'rookie' && x.teams_);
   if (rookie.length) {
     const agg = {};
-    rookie.forEach(x => x.picks.forEach(p => { const a2 = agg[p.owner] = agg[p.owner] || { id: p.owner, picks: 0, hits: 0, multi: 0, value: 0, best: null };
-      a2.picks++; if (p.hit) a2.hits++; if (isMulti(p)) a2.multi++; a2.value += p.value; if (!a2.best || p.value > a2.best.p.value) a2.best = { p, x }; }));
-    const rows = Object.values(agg).map(x => ({ name: name(x.id), href: mlink(x.id), x, v: { picks: x.picks, hits: x.hits, multi: x.multi, rate: x.picks ? x.hits / x.picks : 0, value: x.value, tie: x.value } }));
+    rookie.forEach(x => x.picks.forEach(p => { const a2 = agg[p.owner] = agg[p.owner] || { id: p.owner, picks: 0, hits: 0, multi: 0, elite: 0, value: 0, best: null };
+      a2.picks++; if (p.hit) a2.hits++; if (isMulti(p)) a2.multi++; if (p.elite) a2.elite++; a2.value += p.value; if (!a2.best || p.value > a2.best.p.value) a2.best = { p, x }; }));
+    const rows = Object.values(agg).map(x => ({ name: name(x.id), href: mlink(x.id), x, v: { picks: x.picks, hits: x.hits, multi: x.multi, elite: x.elite, rate: x.picks ? x.hits / x.picks : 0, value: x.value, tie: x.value } }));
     const cols = [
       { key: 'name', label: 'Manager', left: true, cell: r => `<td class="t"><a href="${r.href}" style="text-decoration:none">${r.name}</a></td>` },
       { key: 'picks', label: 'Picks', sortable: true, cell: r => cellNum(String(r.v.picks), '#C9D3D2') },
       { key: 'hits', label: 'Hits', sortable: true, cell: r => cellNum(String(r.v.hits)) },
       { key: 'rate', label: 'Hit %', sortable: true, cell: r => cellNum(Math.round(r.v.rate * 100) + '%') },
       { key: 'multi', label: 'Multi', sortable: true, cell: r => cellNum(String(r.v.multi)) },
+      { key: 'elite', label: 'Elite', sortable: true, cell: r => cellNum(String(r.v.elite), '#E8B04B') },
       { key: 'value', label: 'Value', sortable: true, cell: r => `<td class="${sign(r.v.value)}">${signed(r.v.value, 0)}</td>` },
       { key: 'best', label: 'Best pick', left: true, cell: r => `<td class="t" style="font-weight:400;white-space:nowrap">${r.x.best ? player(r.x.best.p.player_id) + ' <span class="note">' + r.x.best.x.season + ' ' + pickLabel(r.x.best.x, r.x.best.p) + '</span>' : '—'}</td>` }
     ];
@@ -1339,13 +1341,15 @@ function openDynInfo() {
     <b>Startup draft</b>: the big all-player draft that starts the league (12+ rounds). Graded on its own.<br>
     <b>Supplemental draft</b>: a short draft of veterans and leftovers to fill out rosters. Shown for reference, not graded.</p>
     <h3>1. Value each season</h3>
-    <p>For every season since the draft, a player earns his fantasy points minus what a <b>replacement-level starter</b> at his position scored that season: the first player past the league's starting spots (now ${esc(lines || 'QB, RB, WR and TE cutoffs')}). A season never counts below 0, since a stashed or injured player doesn't cost you points. These are the Y1, Y2, Y3… columns, and Total adds them up.</p>
+    <p>For every season since the draft, a player earns his fantasy points minus what a <b>replacement-level starter</b> at his position scored that season: the first player past the league's starting spots (now ${esc(lines || 'QB, RB, WR and TE cutoffs')}). A season never counts below 0, since a stashed or injured player doesn't cost you points.</p>
+    <p><b>Elite seasons count extra.</b> That season's value is multiplied by where he finished at his position: <b>×2</b> for a top-3 finish, <b>×1.6</b> for top 6, <b>×1.3</b> for top 12, ×1 below that (12-team league; the cutoffs scale with league size). Positions where only about one player per team starts, like TE or QB in a 1-QB league, use top 2 / 4 / 8 instead. These are the Y1, Y2, Y3… columns; ★ marks an elite season.</p>
+    <p><b>Longevity counts, with diminishing returns.</b> Total ranks his seasons best to worst and counts them at 100%, 90%, 80%, 70%, then 60% for every season after. Two WR3 seasons beat six WR20 seasons, but a player with elite seasons <i>and</i> a long career beats both.</p>
     <h3>2. What the slot usually gives</h3>
     <p>Each pick is compared with what picks near the same spot produced <b>after the same number of seasons</b> in this league's earlier drafts of the same kind and size (year 2 vs. year 2, and so on). Nearby picks count more, fading out a few slots away. Until there are at least two older drafts to compare with, a pick is compared with the picks around it in its own draft. If the latest season is still being played, older drafts only get that share of the season.</p>
     <h3>3. vs. slot and grades</h3>
     <p><b>vs. slot</b> = Total minus what the slot usually gives. Misses count more early (1.5× in round 1, sliding down to 0.4× in the last round); hits count in full. Each pick's grade compares it with every pick in that draft, and each team's grade compares its total with the other teams: A is a standout, C about average, F far below.</p>
     <h3>4. Hits and multi-hits</h3>
-    <p>A <b>hit</b> is a season where the player finished inside the starting line at his position (a starter-level season). The current season counts once 6 weeks are played. A <b>multi-hit</b> is ${MULTI} or more starter-level seasons: a player who stuck, not a one-year wonder.</p>
+    <p>A <b>hit</b> is a season where the player finished inside the starting line at his position (a starter-level season). The current season counts once 6 weeks are played. A <b>multi-hit</b> is ${MULTI} or more starter-level seasons: a player who stuck, not a one-year wonder. <b>Elite</b> ★ = at least one top-tier season (top 6 at his position in a 12-team league, top 4 at TE or 1-QB).</p>
     <h3>5. How sure is the grade?</h3>
     <p><b>Early</b> (year 1), <b>Settling</b> (year 2), <b>Final</b> (year 3 on). Grades keep moving as players develop, so a slow-starting rookie can climb from a D to an A.</p>
     <h3>Other numbers</h3>
@@ -1364,12 +1368,12 @@ function managerRookieDrafts(id) {
   const value = mine.reduce((t, m) => t + m.p.value, 0);
   const best = mine.slice().sort((a2, b2) => b2.p.value - a2.p.value)[0];
   return `<div class="head"><h2>Rookie drafts</h2><span class="note">${rookie.length} rookie draft${rookie.length === 1 ? '' : 's'}</span></div>
-    <div class="cards"><div class="card"><span class="k">Hit rate</span><span class="v">${Math.round(hits / mine.length * 100)}%</span><span class="note">${hits} of ${mine.length} picks · ${mine.filter(m => isMulti(m.p)).length} multi-hit</span></div>
+    <div class="cards"><div class="card"><span class="k">Hit rate</span><span class="v">${Math.round(hits / mine.length * 100)}%</span><span class="note">${hits} of ${mine.length} picks · ${mine.filter(m => isMulti(m.p)).length} multi-hit · ${mine.filter(m => m.p.elite).length} elite</span></div>
       <div class="card"><span class="k">Value vs. slot</span><span class="v ${sign(value)}">${signed(value, 0)}</span><span class="note">Best: ${player(best.p.player_id)} (${best.x.season} ${pickLabel(best.x, best.p)})</span></div></div>
     <div class="rows">${mine.sort((a2, b2) => Number(b2.x.season) - Number(a2.x.season) || a2.p.pick_no - b2.p.pick_no).map(({ x, p }) => `<button type="button" class="row rowbtn" data-dyn-team="${dynKey(x)}:${p.roster_id}" style="grid-template-columns:52px minmax(0,1fr) auto;padding:11px 0">
       <span class="year">${x.season}</span><span class="stack"><span style="font-size:14px;font-weight:500">${player(p.player_id)} <span class="note">${esc(p.pos || '')}</span>${p.hit ? ' ' + hitMark(p) : ''}</span><span class="sub">Pick ${pickLabel(x, p)} · ${f1(p.total)} pts above replacement since</span></span>
       <span class="num ${sign(p.value)}" style="font-size:14px">${signed(p.value, 0)}</span></button>`).join('')}</div>
-    <span class="note">✓ = starter-level finish in a season (×3 = three of them; 3+ is a multi-hit). Value compares each pick with what that slot usually produces after the same number of seasons.</span>`;
+    <span class="note">✓ = starter-level finish in a season (×3 = three of them; 3+ is a multi-hit). ★ = an elite, top-tier season. Value compares each pick with what that slot usually produces after the same number of seasons.</span>`;
 }
 
 // ---------- Draft history ----------

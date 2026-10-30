@@ -1,7 +1,7 @@
 // Turns raw Sleeper data into every stat, award and score the site shows.
 // Pure functions only: nothing here touches the page or the network.
 
-import { CONFIG } from './config.js?v=202610300534';
+import { CONFIG } from './config.js?v=202610300544';
 
 const ELIGIBLE = {
   QB: ['QB'], RB: ['RB'], WR: ['WR'], TE: ['TE'], K: ['K'], DEF: ['DEF'],
@@ -598,7 +598,24 @@ function draftCurves(seasons) {
 export function dynastyDrafts(seasons) {
   const bySeason = {}; seasons.forEach(S => { bySeason[S.season] = S; });
   const newest = seasons.length ? Number(seasons[0].season) : 0;
-  const yearValue = (S, pid) => Math.max(0, S.aboveRepl(pid));
+  // Elite seasons count extra: ×2 for a top-3 finish at the position, ×1.6 top 6, ×1.3 top 12 (12-team league,
+  // scaled to league size). Positions with only about one starter per team (TE, QB in 1-QB) use top 2 / 4 / 8.
+  const tiersFor = (S, pos) => {
+    const r = S.replacement[pos]; const n = S.rids.length;
+    const tight = !r || (r.rank - 1) <= n * 1.3;
+    return (tight ? [2, 4, 8] : [3, 6, 12]).map(x => Math.max(1, Math.round(x * n / 12)));
+  };
+  const seasonOk = S => !S.isCurrent || S.regWeeks.length >= 6;
+  const tierMult = (S, pid) => {
+    const k = S.posRank[pid]; if (!k) return 1;
+    const t = tiersFor(S, S.posOf(pid));
+    return k <= t[0] ? 2 : k <= t[1] ? 1.6 : k <= t[2] ? 1.3 : 1;
+  };
+  const isElite = (S, pid) => { const k = S.posRank[pid]; return !!(k && seasonOk(S) && k <= tiersFor(S, S.posOf(pid))[1]); };
+  const yearValue = (S, pid) => Math.max(0, S.aboveRepl(pid)) * tierMult(S, pid);
+  // Longevity with diminishing returns: best season 100%, then 90%, 80%, 70%, and 60% for every season after.
+  const DIM = [1, 0.9, 0.8, 0.7];
+  const careerValue = xs => xs.slice().sort((a, b) => b - a).reduce((t, v, i) => t + v * (DIM[i] != null ? DIM[i] : 0.6), 0);
   const isHit = (S, pid) => { const pos = S.posOf(pid); const r = S.replacement[pos]; const k = S.posRank[pid];
     return !!(r && k && k < r.rank && (!S.isCurrent || S.regWeeks.length >= 6)); };
   const starterPtsFor = (S, owner, pid) => {
@@ -614,7 +631,8 @@ export function dynastyDrafts(seasons) {
       const owner = S.ownerOf[p.roster_id];
       const byYear = years.map(Sy => yearValue(Sy, p.player_id));
       const hitYears = years.filter(Sy => isHit(Sy, p.player_id)).map(Sy => Sy.season);
-      return { ...p, owner, slot: ((p.pick_no - 1) % n) + 1, pos: p.pos || S.posOf(p.player_id), byYear, total: byYear.reduce((a, b) => a + b, 0),
+      const eliteYears = years.filter(Sy => isElite(Sy, p.player_id)).map(Sy => Sy.season);
+      return { ...p, owner, slot: ((p.pick_no - 1) % n) + 1, pos: p.pos || S.posOf(p.player_id), byYear, total: careerValue(byYear), eliteYears, elite: eliteYears.length > 0,
         hit: hitYears.length > 0, hitYears, mgrPts: years.reduce((t, Sy) => t + starterPtsFor(Sy, owner, p.player_id), 0),
         bestFinish: years.map(Sy => Sy.posRank[p.player_id]).filter(Boolean).sort((a, b) => a - b)[0] || null };
     });
@@ -628,7 +646,7 @@ export function dynastyDrafts(seasons) {
     // If this draft's latest season is still being played, older drafts only get that share of their k-th season.
     const last = seasons[0];
     const frac = last && last.isCurrent && Number(C.season) + k - 1 === Number(last.season) ? Math.max(1, last.regWeeks.length) / Math.max(1, last.playoffWeekStart - 1) : 1;
-    const cumK = p => p.byYear.slice(0, k - 1).reduce((a, b) => a + b, 0) + (p.byYear[k - 1] || 0) * frac;
+    const cumK = p => careerValue(p.byYear.slice(0, k - 1).concat([(p.byYear[k - 1] || 0) * frac]));
     const pool = peers.length >= 2 ? [].concat.apply([], peers.map(D => D.picks.map(p => ({ at: p.pick_no, v: cumK(p) })))) : null;
     C.basis = pool ? 'history' : 'class';
     const win = Math.max(3, Math.round(C.teams * (pool ? 0.75 : 1)));
