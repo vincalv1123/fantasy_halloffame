@@ -1,7 +1,7 @@
 // Turns raw Sleeper data into every stat, award and score the site shows.
 // Pure functions only: nothing here touches the page or the network.
 
-import { CONFIG } from './config.js?v=202610300644';
+import { CONFIG } from './config.js?v=202610300648';
 
 const ELIGIBLE = {
   QB: ['QB'], RB: ['RB'], WR: ['WR'], TE: ['TE'], K: ['K'], DEF: ['DEF'],
@@ -183,9 +183,10 @@ function buildSeason(raw, players, isNewest, later, format, opts) {
   // Last place = the toilet bowl loser. In Sleeper's losers bracket the team that loses each game
   // moves on, so the "winner" of the final (p = 1) is last. Falls back to the worst record.
   const toilet = (raw.losers || []).find(m => m.p === 1);
-  S.toiletBowl = !!(toilet && toilet.w);
+  // Dynasty: the Sacko is simply the worst regular-season record (no toilet bowl).
+  S.toiletBowl = format !== 'dynasty' && !!(toilet && toilet.w);
   S.lastPlace = raw.status === 'complete' && standings.length
-    ? (toilet && toilet.w ? toilet.w : standings[standings.length - 1].rid) : null;
+    ? (S.toiletBowl ? toilet.w : standings[standings.length - 1].rid) : null;
 
   // Taxi-squad players can't be started, so they're left out of the best-possible lineup.
   // Sleeper only keeps the end-of-season taxi squad, so that list is used for every week.
