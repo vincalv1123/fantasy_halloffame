@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610300444';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610300444';
-import { buildModel, optimalPoints } from './model.js?v=202610300444';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610300444';
+import { CONFIG } from './config.js?v=202610300458';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610300458';
+import { buildModel, optimalPoints } from './model.js?v=202610300458';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610300458';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -531,6 +531,12 @@ function viewSeason(S) {
     out.push(ddSection(S.season + ' draft grades', 'Positional value vs. draft slot', grades + `<a class="btn" href="${PX}drafts@${S.season}">Full ${S.season} draft →</a>`));
   }
 
+  if (LG.format === 'dynasty' && M.dynDrafts) {
+    M.dynDrafts.filter(x => x.season === S.season && x.teams_).forEach(C => {
+      out.push(ddSection(S.season + ' ' + KIND_LABEL[C.kind].toLowerCase() + ' grades', confidence(C), dynTeamRows(C) + `<a class="btn" href="${PX}drafts@${dynKey(C)}">Full ${S.season} ${KIND_LABEL[C.kind].toLowerCase()} →</a>`));
+    });
+  }
+
   if (S.regWeeks.length) {
     const byLuck = S.standings.slice().sort((a, b) => b.luck - a.luck);
     out.push(ddSection('Luck index', S.isCurrent ? 'So far this season' : 'Wins vs. expected wins', `<div class="rows">
@@ -817,6 +823,7 @@ function viewManager(id, seasonSel) {
       ['Draft', W.draft, c.parts.draft, `${picks} picks · ${signed(draft, 0)} positional pts vs. what their draft slots usually produce`]
     ].filter(p => p[2] != null);
     out.push(section(managerCareerAwards(id, list)));
+    if (LG.format === 'dynasty' && M.dynDrafts && M.dynDrafts.length) { const h = managerRookieDrafts(id); if (h) out.push(section(h)); }
     out.push(section(breakdown(`How the ${Math.round(c.score)} breaks down`, parts) +
       '<span class="note">50 = league average that season. Each part here is the games-weighted average of that part across seasons.</span>' + careerCalc(id, list)));
   }
@@ -1198,6 +1205,128 @@ document.addEventListener('keydown', e => {
   if (b && e.target === b) { e.preventDefault(); openMatchup(b.dataset.matchup); }
 });
 
+
+// ---------- Dynasty drafts (rookie, startup, supplemental), judged over the long run ----------
+const KIND_LABEL = { rookie: 'Rookie draft', startup: 'Startup draft', supplemental: 'Supplemental draft' };
+const dynKey = C => C.season + '-' + C.kind;
+const confidence = C => (C.years <= 1 ? 'Early · year 1' : C.years === 2 ? 'Settling · year 2' : 'Final · year ' + C.years);
+const pickLabel = (C, p) => p.round + '.' + String(p.slot).padStart(2, '0');
+const yearCells = (C, p) => p.byYear.map((v, i) => `<td style="color:${v > 0 ? '#F1F4F3' : '#6B7B7E'}">${v > 0 ? '+' + Math.round(v) : '0'}</td>`).join('');
+const yearHeads = C => Array.from({ length: C.years }, (_, i) => `<th title="${Number(C.season) + i}">Y${i + 1}</th>`).join('');
+
+function dynTeamRows(C) {
+  return `<div class="rows">${C.teams_.map(t => { const g = gradeOf(t.z); const best = t.picks.slice().sort((x, y) => y.value - x.value)[0];
+    return `<button type="button" class="row rowbtn" data-dyn-team="${dynKey(C)}:${t.r}" style="grid-template-columns:40px minmax(0,1fr) auto">
+      <span class="grade" style="background:${GRADE_COLORS[g]}">${g}</span>
+      <span class="stack"><span class="name" style="font-size:15px">${name(t.owner)}</span><span class="sub">${t.hits} of ${t.picks.length} hit${best ? ' · best: ' + player(best.player_id) + ' (' + pickLabel(C, best) + ')' : ''}</span></span>
+      <span class="num ${sign(t.value)}" style="font-size:15px">${signed(t.value, 0)}</span></button>`; }).join('')}</div>`;
+}
+
+function dynExplainer(C) {
+  return `<span class="note">Value = each player's points above a replacement-level starter at his position, added up over every season since the draft (a season never counts below 0). It's compared with ${C.basis === 'history' ? 'what picks near the same slot produced after the same number of seasons in this league\'s earlier ' + KIND_LABEL[C.kind].toLowerCase() + 's' : 'the picks around it in this draft (not enough earlier ' + KIND_LABEL[C.kind].toLowerCase() + 's yet to compare against)'}. Misses count more early (1.5× in round 1) and less late. A <b>hit</b> = a starter-level finish at his position in any season. Grades firm up each year: early, settling, then final from year 3.</span>`;
+}
+
+function viewDynDrafts(sel) {
+  const C0 = M.dynDrafts;
+  const order = C0.slice().sort((x, y) => Number(y.season) - Number(x.season) || ['rookie', 'startup', 'supplemental'].indexOf(x.kind) - ['rookie', 'startup', 'supplemental'].indexOf(y.kind));
+  const C = order.find(x => dynKey(x) === sel) || order.find(x => x.season === sel && x.kind === 'rookie') || order.find(x => x.kind === 'rookie') || order[0];
+  const out = [];
+  const lead = C.graded && C.teams_ && C.teams_.length ? `${name(C.teams_[0].owner)} leads${C.years < 3 ? ' so far' : ''}.` : C.graded ? '' : 'Roster fill-ins, not graded.';
+  out.push(section(`<div class="eyebrow">${KIND_LABEL[C.kind]}${C.graded ? ' · ' + confidence(C) : ''}</div>
+    <h1>${C.season} ${KIND_LABEL[C.kind].toLowerCase()}. <span class="soft">${lead}</span></h1>
+    <nav class="chips" aria-label="Choose a draft">${order.map(x => `<a class="pill${x === C ? ' on' : ''}" href="${PX}drafts@${dynKey(x)}">${x.season} ${x.kind === 'rookie' ? 'Rookie' : x.kind === 'startup' ? 'Startup' : 'Supplemental'}</a>`).join('')}</nav>`, 'hero'));
+
+  if (C.graded && C.teams_) {
+    out.push(section(`<div class="head"><h2>Team grades</h2><span class="note">${C.years} season${C.years === 1 ? '' : 's'} of results · tap a team for every pick</span></div>${dynTeamRows(C)}${dynExplainer(C)}`));
+    // Hit rate by round
+    const rounds = [...new Set(C.picks.map(p => p.round))].sort((x, y) => x - y);
+    out.push(section(`<div class="head"><h2>Hit rate by round</h2><span class="note">Starter-level finish in any season</span></div>
+      <div class="scroll"><table class="table"><thead><tr><th style="text-align:left">Round</th><th>Picks</th><th>Hits</th><th>Hit rate</th><th>Avg value</th></tr></thead><tbody>
+      ${rounds.map(rd => { const ps = C.picks.filter(p => p.round === rd); const h = ps.filter(p => p.hit).length;
+        return `<tr><td class="t">Round ${rd}</td><td>${ps.length}</td><td>${h}</td><td>${Math.round(h / ps.length * 100)}%</td><td style="color:#C9D3D2">${f1(ps.reduce((t, p) => t + p.total, 0) / ps.length)}</td></tr>`; }).join('')}</tbody></table></div>`));
+  } else {
+    out.push(section(`<p class="lead">A supplemental draft fills out rosters with veterans and leftover players, so it isn't graded or counted in anyone's draft record. Each player's value since is shown for reference.</p>`));
+  }
+
+  const rounds = [...new Set(C.picks.map(p => p.round))].sort((x, y) => x - y);
+  out.push(section(`<h2>Round by round</h2>${rounds.map(rd => { const ps = C.picks.filter(p => p.round === rd).sort((x, y) => x.pick_no - y.pick_no);
+    return `<details class="calc round"${rd === 1 ? ' open' : ''}><summary>Round ${rd}</summary><div class="calc-body" style="padding-top:4px"><div class="scroll"><table class="table"><thead><tr><th>Pick</th><th style="text-align:left">Player</th><th style="text-align:left">Team</th>${yearHeads(C)}<th>Total</th>${C.graded ? '<th>vs. slot</th><th>Grade</th>' : ''}<th>Hit</th></tr></thead><tbody>
+      ${ps.map(p => { const g = C.graded ? gradeOf(p.z) : null;
+        return `<tr><td class="rk" style="width:auto">${pickLabel(C, p)}</td><td class="t">${player(p.player_id)} <span class="note">${esc(p.pos || '')}</span></td><td class="t" style="font-weight:400"><a href="${mlink(p.owner)}" style="text-decoration:none">${name(p.owner)}</a></td>
+          ${yearCells(C, p)}<td>${f1(p.total)}</td>${C.graded ? `<td class="${sign(p.value)}">${signed(p.value, 0)}</td><td><span class="grade sm" style="background:${GRADE_COLORS[g]}">${g}</span></td>` : ''}<td>${p.hit ? '<span class="up">✓</span>' : ''}</td></tr>`; }).join('')}</tbody></table></div></div></details>`; }).join('')}
+    <span class="note">Y1, Y2… = points above replacement in each season since ${C.season}${C.S.isCurrent || Number(C.season) + C.years - 1 === Number(M.seasons[0].season) && M.seasons[0].isCurrent ? ' (the latest season is still in progress)' : ''}.</span>`));
+
+  // Career rookie drafting across every rookie draft.
+  const rookie = C0.filter(x => x.kind === 'rookie' && x.teams_);
+  if (rookie.length) {
+    const agg = {};
+    rookie.forEach(x => x.picks.forEach(p => { const a2 = agg[p.owner] = agg[p.owner] || { id: p.owner, picks: 0, hits: 0, value: 0, best: null };
+      a2.picks++; if (p.hit) a2.hits++; a2.value += p.value; if (!a2.best || p.value > a2.best.p.value) a2.best = { p, x }; }));
+    const rows = Object.values(agg).map(x => ({ name: name(x.id), href: mlink(x.id), x, v: { picks: x.picks, hits: x.hits, rate: x.picks ? x.hits / x.picks : 0, value: x.value, tie: x.value } }));
+    const cols = [
+      { key: 'name', label: 'Manager', left: true, cell: r => `<td class="t"><a href="${r.href}" style="text-decoration:none">${r.name}</a></td>` },
+      { key: 'picks', label: 'Picks', sortable: true, cell: r => cellNum(String(r.v.picks), '#C9D3D2') },
+      { key: 'hits', label: 'Hits', sortable: true, cell: r => cellNum(String(r.v.hits)) },
+      { key: 'rate', label: 'Hit %', sortable: true, cell: r => cellNum(Math.round(r.v.rate * 100) + '%') },
+      { key: 'value', label: 'Value', sortable: true, cell: r => `<td class="${sign(r.v.value)}">${signed(r.v.value, 0)}</td>` },
+      { key: 'best', label: 'Best pick', left: true, cell: r => `<td class="t" style="font-weight:400;white-space:nowrap">${r.x.best ? player(r.x.best.p.player_id) + ' <span class="note">' + r.x.best.x.season + ' ' + pickLabel(r.x.best.x, r.x.best.p) + '</span>' : '—'}</td>` }
+    ];
+    out.push(section(`<div class="head"><h2>Career rookie drafting</h2><span class="note">All ${rookie.length} rookie draft${rookie.length === 1 ? '' : 's'} · tap a column to sort</span></div>${sortTable(cols, rows, { key: 'value' })}
+      <span class="note">Value adds up each pick's value vs. slot across rookie drafts. Startup and supplemental drafts aren't included.</span>`));
+  }
+  return out.join('');
+}
+
+function openDynTeam(key) {
+  const i = key.lastIndexOf(':'); const ck = key.slice(0, i); const rid = Number(key.slice(i + 1));
+  const C = (M.dynDrafts || []).find(x => dynKey(x) === ck);
+  if (!C || !C.teams_) return;
+  const t = C.teams_.find(x => x.r === rid); if (!t) return;
+  const g = gradeOf(t.z); const rank = C.teams_.indexOf(t) + 1;
+  let dlg = document.getElementById('dyn-modal');
+  if (!dlg) {
+    dlg = document.createElement('dialog'); dlg.id = 'dyn-modal'; dlg.className = 'modal wide'; dlg.setAttribute('aria-labelledby', 'dyn-title');
+    document.body.appendChild(dlg);
+    dlg.addEventListener('click', e => { if (e.target === dlg || e.target.closest('[data-close]')) dlg.close(); });
+  }
+  dlg.innerHTML = `<div class="modal-card">
+    <div class="line2" style="align-items:center"><h2 id="dyn-title" style="font-size:18px">${name(t.owner)} · ${C.season} ${KIND_LABEL[C.kind].toLowerCase()}</h2>
+      <button type="button" class="close" data-close aria-label="Close">✕</button></div>
+    <div class="line2" style="align-items:center;justify-content:flex-start;gap:12px"><span class="grade" style="background:${GRADE_COLORS[g]}">${g}</span>
+      <span class="stack"><span style="font-size:14px">${ordinal(rank)} of ${C.teams_.length} · <span class="num ${sign(t.value)}">${signed(t.value, 0)}</span> vs. slot · ${t.hits} of ${t.picks.length} hit</span>
+      <span class="sub">${confidence(C)}</span></span></div>
+    <div class="scroll"><table class="table"><thead><tr><th>Pick</th><th style="text-align:left">Player</th>${yearHeads(C)}<th>Total</th><th>Best finish</th><th>For ${name(t.owner)}</th><th>vs. slot</th><th>Grade</th><th>Hit</th></tr></thead><tbody>
+    ${t.picks.slice().sort((x, y) => x.pick_no - y.pick_no).map(p => { const pg = gradeOf(p.z);
+      return `<tr><td class="rk" style="width:auto">${pickLabel(C, p)}</td><td class="t">${player(p.player_id)} <span class="note">${esc(p.pos || '')}</span></td>${yearCells(C, p)}
+        <td>${f1(p.total)}</td><td style="color:#C9D3D2">${p.bestFinish ? esc(p.pos || '') + p.bestFinish : '—'}</td><td style="color:#C9D3D2">${f1(p.mgrPts)}</td>
+        <td class="${sign(p.value)}">${signed(p.value, 0)}</td><td><span class="grade sm" style="background:${GRADE_COLORS[pg]}">${pg}</span></td><td>${p.hit ? '<span class="up">✓</span>' : ''}</td></tr>`; }).join('')}</tbody></table></div>
+    <p class="note" style="margin:0">Y1, Y2… = points above replacement each season since the draft. For ${name(t.owner)} = starter points he scored for this team. Best finish = his best positional rank in any season.</p>
+    <a class="btn" href="${mlink(t.owner)}" data-close>Open ${name(t.owner)}'s profile →</a>
+  </div>`;
+  if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
+  const c = dlg.querySelector('.close'); if (c) c.focus();
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-dyn-team]');
+  if (b) { e.preventDefault(); openDynTeam(b.dataset.dynTeam); }
+});
+
+function managerRookieDrafts(id) {
+  const rookie = (M.dynDrafts || []).filter(x => x.kind === 'rookie' && x.teams_);
+  const mine = [].concat.apply([], rookie.map(x => x.picks.filter(p => p.owner === id).map(p => ({ x, p }))));
+  if (!mine.length) return '';
+  const hits = mine.filter(m => m.p.hit).length;
+  const value = mine.reduce((t, m) => t + m.p.value, 0);
+  const best = mine.slice().sort((a2, b2) => b2.p.value - a2.p.value)[0];
+  return `<div class="head"><h2>Rookie drafts</h2><span class="note">${rookie.length} rookie draft${rookie.length === 1 ? '' : 's'}</span></div>
+    <div class="cards"><div class="card"><span class="k">Hit rate</span><span class="v">${Math.round(hits / mine.length * 100)}%</span><span class="note">${hits} of ${mine.length} picks</span></div>
+      <div class="card"><span class="k">Value vs. slot</span><span class="v ${sign(value)}">${signed(value, 0)}</span><span class="note">Best: ${player(best.p.player_id)} (${best.x.season} ${pickLabel(best.x, best.p)})</span></div></div>
+    <div class="rows">${mine.sort((a2, b2) => Number(b2.x.season) - Number(a2.x.season) || a2.p.pick_no - b2.p.pick_no).map(({ x, p }) => `<button type="button" class="row rowbtn" data-dyn-team="${dynKey(x)}:${p.roster_id}" style="grid-template-columns:52px minmax(0,1fr) auto;padding:11px 0">
+      <span class="year">${x.season}</span><span class="stack"><span style="font-size:14px;font-weight:500">${player(p.player_id)} <span class="note">${esc(p.pos || '')}</span>${p.hit ? ' <span class="up">✓</span>' : ''}</span><span class="sub">Pick ${pickLabel(x, p)} · ${f1(p.total)} pts above replacement since</span></span>
+      <span class="num ${sign(p.value)}" style="font-size:14px">${signed(p.value, 0)}</span></button>`).join('')}</div>
+    <span class="note">✓ = starter-level finish in any season. Value compares each pick with what that slot usually produces after the same number of seasons.</span>`;
+}
+
 // ---------- Draft history ----------
 const GRADE_COLORS = { A: '#5FC79B', B: '#9FD8B8', C: '#C9D3D2', D: '#F2B59E', F: '#F0907A' };
 function gradeOf(z) { return z >= 1 ? 'A' : z >= 0.33 ? 'B' : z >= -0.33 ? 'C' : z >= -1 ? 'D' : 'F'; }
@@ -1513,7 +1642,7 @@ function render() {
     bindSearch();
     document.title = 'Stat search' + suffix;
   } else if (route.view === 'drafts') {
-    $app.innerHTML = viewDrafts(route.season);
+    $app.innerHTML = LG.format === 'dynasty' && M.dynDrafts && M.dynDrafts.length ? viewDynDrafts(route.season) : viewDrafts(route.season);
     document.title = 'Drafts' + suffix;
   } else if (route.view === 'playoffs') {
     $app.innerHTML = viewPlayoffs();

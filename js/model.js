@@ -1,7 +1,7 @@
 // Turns raw Sleeper data into every stat, award and score the site shows.
 // Pure functions only: nothing here touches the page or the network.
 
-import { CONFIG } from './config.js?v=202610300444';
+import { CONFIG } from './config.js?v=202610300458';
 
 const ELIGIBLE = {
   QB: ['QB'], RB: ['RB'], WR: ['WR'], TE: ['TE'], K: ['K'], DEF: ['DEF'],
@@ -365,6 +365,12 @@ function buildSeason(raw, players, isNewest, later, format, opts) {
   rids.forEach(r => { draftVal[r] = 0; });
   picks.forEach(p => { if (draftVal[p.roster_id] != null) draftVal[p.roster_id] += p.value; });
   S.picks = picks;
+  // All of the season's drafts, labeled. Dynasty: rookie (nearly all rookies), startup (a full-roster draft)
+  // or supplemental (a short draft of veterans and free agents to fill rosters). Redraft: the one draft.
+  S.drafts = (raw.drafts || []).map(dr => ({
+    ...dr,
+    kind: format !== 'dynasty' ? 'main' : dr.rookieShare >= 0.8 ? 'rookie' : (dr.rounds || 0) >= 12 ? 'startup' : 'supplemental'
+  }));
   S.draftValue = draftVal;
   // Kickers and defenses can't be the steal; they still count toward grades.
   const skill = picks.filter(p => p.pos !== 'K' && p.pos !== 'DEF');
@@ -584,6 +590,67 @@ function draftCurves(seasons) {
   return curves;
 }
 
+// ---------- Dynasty drafts, judged over the long run ----------
+// Each drafted player earns his points above a replacement-level starter at his position in every season
+// since he was drafted (never below 0 in a season: sitting on a bench costs nothing). That running total is
+// compared with what picks near the same slot produced after the same number of seasons in earlier drafts
+// of the same kind; with too little history, with the picks around it in the same draft instead.
+export function dynastyDrafts(seasons) {
+  const bySeason = {}; seasons.forEach(S => { bySeason[S.season] = S; });
+  const newest = seasons.length ? Number(seasons[0].season) : 0;
+  const yearValue = (S, pid) => Math.max(0, S.aboveRepl(pid));
+  const isHit = (S, pid) => { const pos = S.posOf(pid); const r = S.replacement[pos]; const k = S.posRank[pid];
+    return !!(r && k && k < r.rank && (!S.isCurrent || S.regWeeks.length >= 6)); };
+  const starterPtsFor = (S, owner, pid) => {
+    const rid = S.rids.find(x => S.ownerOf[x] === owner); if (rid == null) return 0;
+    let t = 0; S.regWeeks.forEach(w => { const e = S.byWeek[w] && S.byWeek[w][rid]; if (e && e.starters.indexOf(pid) >= 0) t += e.players_points[pid] || 0; }); return t;
+  };
+  const classes = [];
+  seasons.slice().reverse().forEach(S => (S.drafts || []).forEach(dr => {
+    const Y = Number(S.season);
+    const years = []; for (let y = Y; y <= newest; y++) if (bySeason[String(y)]) years.push(bySeason[String(y)]);
+    const n = S.rids.length;
+    const picks = dr.picks.filter(p => p.player_id).map(p => {
+      const owner = S.ownerOf[p.roster_id];
+      const byYear = years.map(Sy => yearValue(Sy, p.player_id));
+      const hitYears = years.filter(Sy => isHit(Sy, p.player_id)).map(Sy => Sy.season);
+      return { ...p, owner, slot: ((p.pick_no - 1) % n) + 1, pos: p.pos || S.posOf(p.player_id), byYear, total: byYear.reduce((a, b) => a + b, 0),
+        hit: hitYears.length > 0, hitYears, mgrPts: years.reduce((t, Sy) => t + starterPtsFor(Sy, owner, p.player_id), 0),
+        bestFinish: years.map(Sy => Sy.posRank[p.player_id]).filter(Boolean).sort((a, b) => a - b)[0] || null };
+    });
+    classes.push({ season: S.season, S, kind: dr.kind, draftId: dr.draftId, rounds: dr.rounds, teams: n, years: years.length, graded: dr.kind !== 'supplemental', picks });
+  }));
+  // Expected value for a slot after k seasons, from older drafts of the same kind and size.
+  classes.forEach(C => {
+    if (!C.graded || !C.picks.length) return;
+    const k = C.years;
+    const peers = classes.filter(D => D !== C && D.kind === C.kind && D.teams === C.teams && D.years > k && D.picks.length);
+    const cumK = p => p.byYear.slice(0, k).reduce((a, b) => a + b, 0);
+    const pool = peers.length >= 2 ? [].concat.apply([], peers.map(D => D.picks.map(p => ({ at: p.pick_no, v: cumK(p) })))) : null;
+    C.basis = pool ? 'history' : 'class';
+    const win = Math.max(3, Math.round(C.teams * (pool ? 0.75 : 1)));
+    C.picks.forEach(p => {
+      const src = pool || C.picks.map(q => ({ at: q.pick_no, v: q.total }));
+      let ws = 0; let t = 0;
+      src.forEach(q => { const dd = Math.abs(q.at - p.pick_no); if (dd <= win) { const w = 1 - dd / (win + 1); ws += w; t += w * q.v; } });
+      p.expected = ws ? t / ws : 0;
+    });
+    const offset = C.picks.reduce((t, p) => t + (p.total - p.expected), 0) / C.picks.length;
+    const lastRound = C.picks.reduce((mx, p) => Math.max(mx, p.round), 1);
+    const missW = rd => (lastRound <= 1 ? 1 : 1.5 - 1.1 * (rd - 1) / (lastRound - 1));
+    C.picks.forEach(p => { p.expected += offset; p.raw = p.total - p.expected; p.value = p.raw < 0 ? p.raw * missW(p.round) : p.raw; });
+    const z = xs => { const mu = mean(xs); const s = sd(xs) || 1; return x => (x - mu) / s; };
+    const pz = z(C.picks.map(p => p.value));
+    C.picks.forEach(p => { p.z = pz(p.value); });
+    const teams = C.S.rids.map(r => { const ps = C.picks.filter(p => p.roster_id === r);
+      return { r, owner: C.S.ownerOf[r], picks: ps, value: ps.reduce((t, p) => t + p.value, 0), hits: ps.filter(p => p.hit).length }; }).filter(t => t.picks.length);
+    const tz = z(teams.map(t => t.value));
+    teams.forEach(t => { t.z = tz(t.value); });
+    C.teams_ = teams.sort((a, b) => b.value - a.value);
+  });
+  return classes;
+}
+
 export function buildModel(data, format) {
   const players = data.players;
   // data.seasons is newest first, so the seasons after season i are 0..i-1 (oldest first).
@@ -751,6 +818,7 @@ export function buildModel(data, format) {
 
   return {
     seasons, managers, career, leaderboard, records, h2h, h2hRecord, rivalry, allTrades, heist, swapCareer,
-    nameOf, playerName, playerPos, newest
+    nameOf, playerName, playerPos, newest,
+    dynDrafts: format === 'dynasty' ? dynastyDrafts(seasons) : []
   };
 }
