@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610302125';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610302125';
-import { buildModel, optimalPoints } from './model.js?v=202610302125';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610302125';
+import { CONFIG } from './config.js?v=202610302140';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610302140';
+import { buildModel, optimalPoints } from './model.js?v=202610302140';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610302140';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -286,6 +286,18 @@ function viewAll() {
     cards.push(`<button type="button" class="box tradebtn"${key ? ` data-matchup="${key}"` : ''}>${hdr('Worst bench blunder · tap for the lineups', 'down')}
     <div class="line2"><span style="font-weight:600">${name(blunder.S.ownerOf[blunder.b.rid])}</span><span class="num down">${f1(blunder.b.gap)} pts</span></div>
     <span class="note">${blunder.S.season} · Week ${blunder.b.week} · left on the bench${blunder.b.wouldHaveWon ? ' · would have won' : blunder.b.lostBy != null ? ' · lost by ' + f1(blunder.b.lostBy) : ''}</span></button>`); }
+  // Career bests and worsts: waivers, trades and the draft (redraft).
+  if (LG.format !== 'dynasty' && done2.length) {
+    const a = allTimeTotals();
+    const card = (x, title, cls, v, d) => { if (x) cards.push(`<a class="box" href="${mlink(x.id)}" style="text-decoration:none">${hdr(title, cls)}
+      <div class="line2"><span style="font-weight:600">${name(x.id)}</span><span class="num ${cls}">${v}</span></div><span class="note">${d}</span></a>`); };
+    card(a.waiverBest, 'All-time Waiver Wire King', 'up', a.waiverBest && signed(a.waiverBest.waiver) + ' over repl.', a.waiverBest && a.waiverBest.adds + ' pickups, career');
+    card(a.waiverWorst, 'All-time worst on the wire', 'down', a.waiverWorst && signed(a.waiverWorst.waiver) + ' over repl.', a.waiverWorst && a.waiverWorst.adds + ' pickups, career');
+    card(a.tradeBest, 'Best career trade +/−', 'up', a.tradeBest && signed(a.tradeBest.trade), a.tradeBest && a.tradeBest.trades + ' trades · value got minus value given');
+    card(a.tradeWorst, 'Worst career trade +/−', 'down', a.tradeWorst && signed(a.tradeWorst.trade), a.tradeWorst && a.tradeWorst.trades + ' trades · value got minus value given');
+    card(a.draftBest, 'Most career draft value vs. slot', 'up', a.draftBest && signed(a.draftBest.draft, 0), a.draftBest && a.draftBest.picks + ' picks in ' + a.draftBest.drafts + ' drafts');
+    card(a.draftWorst, 'Least career draft value vs. slot', 'down', a.draftWorst && signed(a.draftWorst.draft, 0), a.draftWorst && a.draftWorst.picks + ' picks in ' + a.draftWorst.drafts + ' drafts');
+  }
   if (cards.length) out.push(section(`<div class="head"><h2>All-time bests &amp; worsts</h2><span class="note">Finished seasons</span></div><div style="display:flex;flex-direction:column;gap:10px">${cards.join('')}</div>
     <span class="note">Waiver pickups count points above a replacement-level starter at their position for every start.</span>`));
 
@@ -1619,6 +1631,44 @@ function awardDesc(key) {
   })[key] || '';
 }
 
+// All-time career totals behind the all-time awards (finished seasons, redraft only): waiver points above
+// replacement, trade +/- and draft value vs. slot, with the best and worst manager for each.
+function allTimeTotals() {
+  const t = {};
+  completed().forEach(S => S.rids.forEach(r => {
+    const id = S.ownerOf[r];
+    const x = t[id] = t[id] || { id, waiver: 0, adds: 0, trade: 0, trades: 0, draft: 0, drafts: 0, picks: 0 };
+    x.waiver += S.waivers[r].pts; x.adds += S.waivers[r].adds;
+    x.trade += S.tradeNet[r].net; x.trades += S.tradeNet[r].count;
+    const mine = S.picks.filter(p => p.roster_id === r);
+    if (mine.length) { x.draft += S.draftValue[r] || 0; x.drafts++; x.picks += mine.length; }
+  }));
+  const list = Object.values(t);
+  const pick = (k, dir, ok) => list.filter(ok || (() => true)).sort((a, b) => dir * (b[k] - a[k]))[0] || null;
+  const hasTrades = x => x.trades > 0; const hasDrafts = x => x.drafts > 0;
+  return {
+    waiverBest: pick('waiver', 1), waiverWorst: pick('waiver', -1),
+    tradeBest: pick('trade', 1, hasTrades), tradeWorst: pick('trade', -1, hasTrades),
+    draftBest: pick('draft', 1, hasDrafts), draftWorst: pick('draft', -1, hasDrafts)
+  };
+}
+// The all-time rows shown at the top of an award's dropdown: [label, manager totals, value, detail].
+function allTimeRows(key) {
+  if (LG.format === 'dynasty' || !completed().length) return [];
+  const a = allTimeTotals();
+  const w = x => [signed(x.waiver) + ' pts', x.adds + ' pickup' + (x.adds === 1 ? '' : 's') + ', points above replacement for every start'];
+  const tr = x => [signed(x.trade), x.trades + ' trade' + (x.trades === 1 ? '' : 's') + ', value got minus value given'];
+  const dr = x => [signed(x.draft, 0), x.picks + ' picks in ' + x.drafts + ' draft' + (x.drafts === 1 ? '' : 's') + ', positional value vs. draft slot'];
+  const rows = {
+    waiver: [['All-time Waiver Wire King', a.waiverBest, w, 'up'], ['All-time worst on the wire', a.waiverWorst, w, 'down']],
+    trade: [['Best trade +/− ever', a.tradeBest, tr, 'up']],
+    fleeced: [['Worst trade +/− ever', a.tradeWorst, tr, 'down']],
+    steal: [['Most draft value vs. slot ever', a.draftBest, dr, 'up']],
+    bust: [['Least draft value vs. slot ever', a.draftWorst, dr, 'down']]
+  }[key] || [];
+  return rows.filter(r => r[1]);
+}
+
 const AWARD_ORDER = ['champion', 'runnerUp', 'regSeason', 'bestMgr', 'waiver', 'trade', 'steal', 'scout', 'highScore', 'luckiest', 'worstMgr', 'bust', 'fleeced', 'unluckiest', 'blunder', 'sacko'];
 function viewAwards() {
   const bySeason = M.seasons.map(S => ({ S, list: seasonAwards(S) }));
@@ -1647,7 +1697,10 @@ function viewAwards() {
     const entries = bySeason.map(({ S, list }) => ({ S, a: list.find(x => x.key === key) })).filter(x => x.a);
     const tier = key === 'sacko' ? 'sacko' : entries[0].a.major ? 'major' : entries[0].a.good ? 'good' : 'bad';
     return `<details class="calc aw-${tier}"${key === 'champion' || key === 'sacko' ? ' open' : ''}><summary><span style="display:flex;align-items:center;gap:8px"><span class="dot"></span>${esc(seen[key])}</span></summary>
-      <div class="calc-body" style="padding-top:4px">${awardDesc(key) ? `<p class="award-desc">${awardDesc(key)}</p>` : ''}<div class="rows">${entries.map(({ S, a }) => `<a class="row" href="${mlink(S.ownerOf[a.rid])}@${S.season}" style="grid-template-columns:52px minmax(0,1fr) auto">
+      <div class="calc-body" style="padding-top:4px">${awardDesc(key) ? `<p class="award-desc">${awardDesc(key)}</p>` : ''}${allTimeRows(key).length ? `<span class="note" style="text-transform:uppercase;letter-spacing:.05em;font-size:11px">All time · finished seasons</span>
+        <div class="rows" style="margin-bottom:12px">${allTimeRows(key).map(([label, x, fmt, cls]) => { const [v, d] = fmt(x); return `<a class="row" href="${mlink(x.id)}" style="grid-template-columns:minmax(0,1fr) auto">
+          <span class="stack"><span class="name" style="font-size:14px">${name(x.id)}</span><span class="sub">${label} · ${d}</span></span><span class="num ${cls}" style="font-size:14px">${v}</span></a>`; }).join('')}</div>
+        <span class="note" style="text-transform:uppercase;letter-spacing:.05em;font-size:11px">By season</span>` : ''}<div class="rows">${entries.map(({ S, a }) => `<a class="row" href="${mlink(S.ownerOf[a.rid])}@${S.season}" style="grid-template-columns:52px minmax(0,1fr) auto">
         <span class="year">${S.season}</span><span class="stack"><span class="name" style="font-size:14px">${name(S.ownerOf[a.rid])}${S.isCurrent ? ' <span class="note">so far</span>' : ''}</span><span class="sub">${a.d}</span></span>
         <span class="num" style="font-size:14px">${a.v}</span></a>`).join('')}</div></div></details>`;
   };
