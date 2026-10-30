@@ -397,3 +397,9 @@ button.tile.tbtn:hover, button.tile.tbtn:focus-visible { background: var(--panel
 .row.high-row { grid-template-columns: 22px 52px minmax(0,1fr) auto; padding: 12px 0; }
 .row.high-row.rowbtn:hover { background: var(--panel); }
 .calc.trades-dd { margin-top: 0; }
+
+/* Info button and explainer pop-up */
+.info-btn { align-self: flex-start; background: none; border: 1px solid var(--line-strong); color: var(--fg-2); border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 12px; cursor: pointer; margin: 4px 0 2px; }
+.info-btn:hover { color: var(--fg); border-color: var(--fg-2); }
+.info-card h3 { margin: 4px 0 0; font-size: 14px; }
+.info-card p { margin: 0; font-size: 13px; line-height: 1.55; color: var(--fg-2); }
