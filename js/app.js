@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610300544';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610300544';
-import { buildModel, optimalPoints } from './model.js?v=202610300544';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610300544';
+import { CONFIG } from './config.js?v=202610300610';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610300610';
+import { buildModel, optimalPoints } from './model.js?v=202610300610';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610300610';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -1346,6 +1346,7 @@ function openDynInfo() {
     <p><b>Longevity counts, with diminishing returns.</b> Total ranks his seasons best to worst and counts them at 100%, 90%, 80%, 70%, then 60% for every season after. Two WR3 seasons beat six WR20 seasons, but a player with elite seasons <i>and</i> a long career beats both.</p>
     <h3>2. What the slot usually gives</h3>
     <p>Each pick is compared with what picks near the same spot produced <b>after the same number of seasons</b> in this league's earlier drafts of the same kind and size (year 2 vs. year 2, and so on). Nearby picks count more, fading out a few slots away. Until there are at least two older drafts to compare with, a pick is compared with the picks around it in its own draft. If the latest season is still being played, older drafts only get that share of the season.</p>
+    <p><b>Guard rails for small samples.</b> The league's own history is blended with a standard curve where value falls off smoothly by pick, and the history counts more as it builds up (2 older drafts = 40%, 4 = 57%, 8 = 73%; within a single draft, half and half). Then the bar is smoothed so an earlier pick never has a lower bar than a later one, so a run of busts at 1.01 can't make 1.01 easier to beat than 1.02.</p>
     <h3>3. vs. slot and grades</h3>
     <p><b>vs. slot</b> = Total minus what the slot usually gives. Misses count more early (1.5× in round 1, sliding down to 0.4× in the last round); hits count in full. Each pick's grade compares it with every pick in that draft, and each team's grade compares its total with the other teams: A is a standout, C about average, F far below.</p>
     <h3>4. Hits and multi-hits</h3>

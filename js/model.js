@@ -1,7 +1,7 @@
 // Turns raw Sleeper data into every stat, award and score the site shows.
 // Pure functions only: nothing here touches the page or the network.
 
-import { CONFIG } from './config.js?v=202610300544';
+import { CONFIG } from './config.js?v=202610300610';
 
 const ELIGIBLE = {
   QB: ['QB'], RB: ['RB'], WR: ['WR'], TE: ['TE'], K: ['K'], DEF: ['DEF'],
@@ -18,6 +18,25 @@ function sd(xs) {
   const m = mean(xs);
   return Math.sqrt(sum(xs.map(x => (x - m) * (x - m))) / (xs.length - 1));
 }
+
+// Make values non-increasing in pick order (an earlier pick never has a lower bar than a later one):
+// pool-adjacent-violators, averaging any run that goes the wrong way.
+function nonIncreasing(vals) {
+  const blocks = [];
+  vals.forEach(v => {
+    blocks.push({ sum: v, n: 1 });
+    while (blocks.length > 1 && blocks[blocks.length - 2].sum / blocks[blocks.length - 2].n < blocks[blocks.length - 1].sum / blocks[blocks.length - 1].n) {
+      const b = blocks.pop(); blocks[blocks.length - 1].sum += b.sum; blocks[blocks.length - 1].n += b.n;
+    }
+  });
+  const out = []; blocks.forEach(b => { for (let i = 0; i < b.n; i++) out.push(b.sum / b.n); });
+  return out;
+}
+const smoothBySlot = picks => {
+  const order = picks.slice().sort((a, b) => a.pick_no - b.pick_no);
+  const sm = nonIncreasing(order.map(p => p.expected));
+  order.forEach((p, i) => { p.expected = sm[i]; });
+};
 
 // Rescale raw values so the league average that season is 50 (one SD = 20 points).
 function scale(values) {
@@ -349,6 +368,7 @@ function buildSeason(raw, players, isNewest, later, format, opts) {
     if (curve) p.expected = curve(p.pick_no);
     else p.expected = mean(picks.filter(q => Math.abs(q.pick_no - p.pick_no) <= 6).map(q => q.vor));
   });
+  smoothBySlot(picks);
   // The curve sets the shape (how value falls off by pick); re-centering keeps each draft's picks
   // averaging zero, so a strong or weak season overall doesn't push every team up or down.
   const offset = curve ? mean(picks.map(p => p.vor - p.expected)) : 0;
@@ -656,6 +676,16 @@ export function dynastyDrafts(seasons) {
       src.forEach(q => { const dd = Math.abs(q.at - p.pick_no); if (dd <= win) { const w = 1 - dd / (win + 1); ws += w; t += w * q.v; } });
       p.expected = ws ? t / ws : 0;
     });
+    // Blend with a standard rookie-draft curve (value falling off smoothly by pick), trusting the league's own
+    // history more as it builds up: 2 older drafts = 40% history, 4 = 57%, 8 = 73%. Within one draft: 50/50.
+    const src0 = pool || C.picks.map(q => ({ at: q.pick_no, v: q.total }));
+    const lam = Math.max(4, C.teams * 1.2);
+    const shape = k => Math.exp(-(k - 1) / lam);
+    const level = mean(src0.map(q => q.v)) / (mean(src0.map(q => shape(q.at))) || 1);
+    const trust = pool ? peers.length / (peers.length + 3) : 0.5;
+    C.trust = trust;
+    C.picks.forEach(p => { p.expected = trust * p.expected + (1 - trust) * level * shape(p.pick_no); });
+    smoothBySlot(C.picks);
     // Against the picks around it in the same draft, the picks already average out; against history, a strong or
     // weak class should show, so no re-centering (a player with nothing to show is never above his slot).
     const offset = 0;
