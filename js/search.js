@@ -2,7 +2,7 @@
 // season, week and player it is about, and answers from the league data.
 // Rule-based, so it understands the question shapes listed in EXAMPLES and HELP.
 
-import { parseRank, rankAnswer } from './rank.js?v=202610302300';
+import { parseRank, rankAnswer } from './rank.js?v=202610302310';
 
 export const EXAMPLES = [
   'Best season ever by manager score',

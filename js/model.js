@@ -1,7 +1,7 @@
 // Turns raw Sleeper data into every stat, award and score the site shows.
 // Pure functions only: nothing here touches the page or the network.
 
-import { CONFIG } from './config.js?v=202610302300';
+import { CONFIG } from './config.js?v=202610302310';
 
 const ELIGIBLE = {
   QB: ['QB'], RB: ['RB'], WR: ['WR'], TE: ['TE'], K: ['K'], DEF: ['DEF'],
@@ -356,6 +356,9 @@ function buildSeason(raw, players, isNewest, later, format, opts) {
   };
   const replPpg = p => replBase(p) / replWeeks;
   S.replPpg = replPpg;
+  // Kickers and defenses count for less in waiver, trade and draft values (CONFIG.kDefWeight, e.g. ½).
+  const kdw = pos => (pos === 'K' || pos === 'DEF' ? (CONFIG.kDefWeight != null ? CONFIG.kDefWeight : 1) : 1);
+  S.kdw = kdw;
 
   // Redraft trade values (see Trades above), now that the replacement levels are known.
   const weekPts = {};
@@ -363,7 +366,7 @@ function buildSeason(raw, players, isNewest, later, format, opts) {
   const restValue = (pid, fromWeek) => {
     let pts = 0; let gp = 0;
     allWeeks.forEach(w => { if (w < fromWeek) return; const x = weekPts[w][pid]; if (x != null && x > 0) { pts += x; gp++; } });
-    return { pts, games: gp, value: Math.max(0, pts - gp * replPpg(posOf(pid))) };
+    return { pts, games: gp, value: Math.max(0, pts - gp * replPpg(posOf(pid))) * kdw(posOf(pid)) };
   };
   trades.forEach(t => {
     if (!t.valueMode) { t.sides.forEach(sd => { const T = tradeNet[sd.rid]; if (T) { T.net += sd.net; T.count++; } }); return; }
@@ -387,7 +390,7 @@ function buildSeason(raw, players, isNewest, later, format, opts) {
     W.rawPts = W.pts; W.pts = 0; W.best = null;
     (W.list || []).forEach(x => {
       x.raw = x.pts; x.pos = posOf(x.pid);
-      x.pts = x.raw - x.starts * replPpg(x.pos);
+      x.pts = (x.raw - x.starts * replPpg(x.pos)) * kdw(x.pos);
       W.pts += x.pts;
       if (!W.best || x.pts > W.best.pts) W.best = { pid: x.pid, pts: x.pts, raw: x.raw, starts: x.starts, week: x.week };
     });
@@ -414,7 +417,7 @@ function buildSeason(raw, players, isNewest, later, format, opts) {
   // The curve sets the shape (how value falls off by pick); re-centering keeps each draft's picks
   // averaging zero, so a strong or weak season overall doesn't push every team up or down.
   const offset = curve ? mean(picks.map(p => p.vor - p.expected)) : 0;
-  picks.forEach(p => { p.expected += offset; p.value = p.vor - p.expected; });
+  picks.forEach(p => { p.expected += offset; p.value = (p.vor - p.expected) * kdw(p.pos); });
   // Misses hurt more early and less late: a below-slot pick counts 1.5x in round 1, sliding to 0.4x
   // in the last round. Hits count in full. rawValue keeps the unweighted number.
   const lastRound = picks.reduce((m, p) => Math.max(m, p.round || 1), 1);

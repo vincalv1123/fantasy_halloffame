@@ -11,6 +11,10 @@ export const CONFIG = {
   // that slot has produced across the league's drafts. 0 = slot history only.
   draftHindsight: 0.3,
 
+  // Kickers and defenses count for this share of their value in waiver, trade and draft numbers
+  // (they're easy to replace and swing week to week). 1 = full value.
+  kDefWeight: 0.5,
+
   // Bonus points added to the Results part of the score.
   bonus: { playoffs: 3, final: 5, title: 10 },
 
