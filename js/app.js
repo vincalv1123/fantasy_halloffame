@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610300610';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610300610';
-import { buildModel, optimalPoints } from './model.js?v=202610300610';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610300610';
+import { CONFIG } from './config.js?v=202610300620';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610300620';
+import { buildModel, optimalPoints } from './model.js?v=202610300620';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610300620';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -1371,9 +1371,14 @@ function managerRookieDrafts(id) {
   return `<div class="head"><h2>Rookie drafts</h2><span class="note">${rookie.length} rookie draft${rookie.length === 1 ? '' : 's'}</span></div>
     <div class="cards"><div class="card"><span class="k">Hit rate</span><span class="v">${Math.round(hits / mine.length * 100)}%</span><span class="note">${hits} of ${mine.length} picks · ${mine.filter(m => isMulti(m.p)).length} multi-hit · ${mine.filter(m => m.p.elite).length} elite</span></div>
       <div class="card"><span class="k">Value vs. slot</span><span class="v ${sign(value)}">${signed(value, 0)}</span><span class="note">Best: ${player(best.p.player_id)} (${best.x.season} ${pickLabel(best.x, best.p)})</span></div></div>
-    <div class="rows">${mine.sort((a2, b2) => Number(b2.x.season) - Number(a2.x.season) || a2.p.pick_no - b2.p.pick_no).map(({ x, p }) => `<button type="button" class="row rowbtn" data-dyn-team="${dynKey(x)}:${p.roster_id}" style="grid-template-columns:52px minmax(0,1fr) auto;padding:11px 0">
+    <details class="calc"><summary>Drafts <span class="note" style="font-weight:400;margin-left:8px;margin-right:auto">${[...new Set(mine.map(m => m.x.season))].length} rookie draft${[...new Set(mine.map(m => m.x.season))].length === 1 ? '' : 's'} · ${mine.length} picks</span></summary><div class="calc-body" style="gap:8px">
+    ${[...new Set(mine.map(m => m.x.season))].sort((y1, y2) => Number(y2) - Number(y1)).map(yr => { const ys = mine.filter(m => m.x.season === yr).sort((a2, b2) => a2.p.pick_no - b2.p.pick_no);
+      const yv = ys.reduce((t, m) => t + m.p.value, 0); const yh = ys.filter(m => m.p.hit).length;
+      return `<details class="calc"><summary><span>${yr} rookie draft <span class="note" style="font-weight:400">· ${ys.length} pick${ys.length === 1 ? '' : 's'} · ${yh} hit</span></span><span class="num ${sign(yv)}" style="font-size:13px;margin-left:auto;margin-right:12px">${signed(yv, 0)}</span></summary>
+        <div class="calc-body" style="padding-top:4px"><div class="rows">${ys.map(({ x, p }) => `<button type="button" class="row rowbtn" data-dyn-team="${dynKey(x)}:${p.roster_id}" style="grid-template-columns:52px minmax(0,1fr) auto;padding:11px 0">
       <span class="year">${x.season}</span><span class="stack"><span style="font-size:14px;font-weight:500">${player(p.player_id)} <span class="note">${esc(p.pos || '')}</span>${p.hit ? ' ' + hitMark(p) : ''}</span><span class="sub">Pick ${pickLabel(x, p)} · ${f1(p.total)} pts above replacement since</span></span>
-      <span class="num ${sign(p.value)}" style="font-size:14px">${signed(p.value, 0)}</span></button>`).join('')}</div>
+      <span class="num ${sign(p.value)}" style="font-size:14px">${signed(p.value, 0)}</span></button>`).join('')}</div></div></details>`; }).join('')}
+    </div></details>
     <span class="note">✓ = starter-level finish in a season (×3 = three of them; 3+ is a multi-hit). ★ = an elite, top-tier season. Value compares each pick with what that slot usually produces after the same number of seasons.</span>`;
 }
 
