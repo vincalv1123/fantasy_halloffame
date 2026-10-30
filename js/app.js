@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610300650';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610300650';
-import { buildModel, optimalPoints } from './model.js?v=202610300650';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610300650';
+import { CONFIG } from './config.js?v=202610301630';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610301630';
+import { buildModel, optimalPoints } from './model.js?v=202610301630';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610301630';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -674,7 +674,7 @@ function seasonCalc(x) {
     <div class="scroll"><table class="table"><thead><tr><th>Part</th><th>Raw stat</th><th>League avg</th><th>Spread</th><th>Scaled</th><th>Weight</th><th>Adds</th></tr></thead>
     <tbody>${rows}<tr><td class="t" style="font-weight:600">Total</td><td></td><td></td><td></td><td></td><td></td><td style="font-weight:600;color:#F1F4F3">${f1(sc.total)}</td></tr></tbody></table></div>
     <ol class="steps">
-      <li><b>Raw stats.</b> Results = ½ × win % (${pct3(x.st.winPct)}) + ½ × all-play (${pct3(x.st.allPlayPct)}) = ${pct3(sc.raw.results)}. Start/sit = points started ÷ best possible lineup (${comma(x.eff.actual)} ÷ ${comma(x.eff.optimal)}). Waivers = points above a replacement-level starter at each pickup's position, for every start. Trades = starter points gained minus given up.${S.hasDraft ? ' Draft = each pick’s points above a replacement-level starter at his position, minus what picks near the same slot were worth.' : ''}</li>
+      <li><b>Raw stats.</b> Results = ½ × win % (${pct3(x.st.winPct)}) + ½ × all-play (${pct3(x.st.allPlayPct)}) = ${pct3(sc.raw.results)}. Start/sit = points started ÷ best possible lineup (${comma(x.eff.actual)} ÷ ${comma(x.eff.optimal)}). Waivers = points above a replacement-level starter at each pickup's position, for every start. Trades = starter points gained minus given up.${S.hasDraft ? ' Draft = each pick’s points above a replacement-level starter at his position, minus what the slot was expected to give (70% what picks near it were worth across this league’s drafts, 30% the value of the player who finished that many spots down the board).' : ''}</li>
       <li><b>Scaled.</b> 50 + 20 × (raw − league avg) ÷ spread, kept between 0 and 100. Spread is the standard deviation across all ${S.rids.length} teams that season.</li>
       <li><b>Bonus.</b> ${sc.bonusParts.length ? 'Results got ' + sc.bonusParts.join(', ') + ' (capped at 100).' : 'No playoff, final or title bonus this season.'}${S.isCurrent ? ' Bonuses are added once the season ends.' : ''}</li>
       <li><b>Score.</b> Each scaled part × its weight, divided by the total weight (${Math.round(S.weightSum * 100)}%) = <b>${f1(sc.total)}</b>.</li>
@@ -1495,11 +1495,20 @@ function viewDrafts(seasonSel) {
         <td>${f1(p.pts)}</td><td style="color:#C9D3D2">${esc(p.pos)}${p.posDrafted}</td><td style="color:#C9D3D2">${S.posRank[p.player_id] ? esc(p.pos) + S.posRank[p.player_id] : '—'}${finishMove(p, S)}</td><td>${signed(p.vor, 0)}</td>${dynasty ? `<td style="color:#C9D3D2">${f1(sincePts(p.player_id))}</td>` : ''}
         <td class="${sign(p.value)}">${signed(p.value, 0)}</td></tr>`).join('')}</tbody></table></div></div></details>`;
   }).join('')}
-    <span class="note">Pts = regular-season points that year. Drafted = when his position came off the board (WR1 = first WR taken). Finish = rank at his position among rostered players, with ▲/▼ vs. where he was drafted. Above repl. = points above the replacement-level starter at his position. vs. slot = above repl. minus what that pick number usually produces across this league's drafts; misses count 1.5× in round 1 sliding to 0.4× in the last round. Worst tags only go to rounds 1–9.${dynasty ? ' Since = regular-season points in every season after this draft, for any team.' : ''}</span>`));
+    <span class="note">Pts = regular-season points that year. Drafted = when his position came off the board (WR1 = first WR taken). Finish = rank at his position among rostered players, with ▲/▼ vs. where he was drafted. Above repl. = points above the replacement-level starter at his position. vs. slot = above repl. minus ${slotExp()}; misses count 1.5× in round 1 sliding to 0.4× in the last round. Worst tags only go to rounds 1–9.${dynasty ? ' Since = regular-season points in every season after this draft, for any team.' : ''}</span>`));
   return out.join('');
 }
 
 // Finish vs. draft position: ▲ beat it, ▼ fell short (e.g. drafted WR1, finished WR3 = ▼2).
+// How a draft pick's expected value is set, for the notes under draft tables (hindsight blend is redraft only).
+function slotExp() {
+  const hw = LG.format === 'dynasty' ? 0 : (CONFIG.draftHindsight || 0);
+  const hist = "what that pick number usually produces across this league's drafts";
+  if (!hw) return hist;
+  return 'what that pick was expected to produce: ' + Math.round((1 - hw) * 100) + '% ' + hist.replace('what that pick number usually produces', 'what the pick number usually gives') +
+    ', ' + Math.round(hw * 100) + '% the value of the Nth-best player that season for pick N (so a 1st overall pick that finishes 10th falls short)';
+}
+
 function finishMove(p, S) {
   const f = S.posRank[p.player_id];
   if (!f || !p.posDrafted || f === p.posDrafted) return '';
@@ -1552,7 +1561,7 @@ function openDraftTeam(season, rid) {
         <td>${f1(p.pts)}</td><td style="color:#C9D3D2">${esc(p.pos)}${p.posDrafted}</td><td style="color:#C9D3D2">${S.posRank[p.player_id] ? esc(p.pos) + S.posRank[p.player_id] : '—'}${finishMove(p, S)}</td><td>${signed(p.vor, 0)}</td>
         ${showSince ? `<td style="color:#C9D3D2">${f1(sincePts(p.player_id))}</td>` : ''}<td class="${sign(p.value)}">${signed(p.value, 0)}</td>
         ${showGrades ? `<td><span class="grade sm" style="background:${GRADE_COLORS[g]}">${g}</span></td>` : ''}</tr>`; }).join('')}</tbody></table></div>
-    <p class="note" style="margin:0">${showGrades ? 'Each pick is graded against every pick in the ' + S.season + ' draft: A is a standout pick for its slot, C is about what that slot usually gives, F is far below. ' : ''}vs. slot = points above a replacement-level starter at his position, minus what that pick number usually produces across this league's drafts. Misses count more early (1.5× in round 1) and less late (0.4× in the last round); hits count in full. Drafted = when his position came off the board; Finish = where he ended up.</p>
+    <p class="note" style="margin:0">${showGrades ? 'Each pick is graded against every pick in the ' + S.season + ' draft: A is a standout pick for its slot, C is about what that slot usually gives, F is far below. ' : ''}vs. slot = points above a replacement-level starter at his position, minus ${slotExp()}. Misses count more early (1.5× in round 1) and less late (0.4× in the last round); hits count in full. Drafted = when his position came off the board; Finish = where he ended up.</p>
     <a class="btn" href="${mlink(id)}@${S.season}" data-close>Open ${name(id)}'s ${S.season} profile →</a>
   </div>`;
   if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');

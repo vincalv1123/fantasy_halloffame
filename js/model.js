@@ -1,7 +1,7 @@
 // Turns raw Sleeper data into every stat, award and score the site shows.
 // Pure functions only: nothing here touches the page or the network.
 
-import { CONFIG } from './config.js?v=202610300650';
+import { CONFIG } from './config.js?v=202610301630';
 
 const ELIGIBLE = {
   QB: ['QB'], RB: ['RB'], WR: ['WR'], TE: ['TE'], K: ['K'], DEF: ['DEF'],
@@ -369,6 +369,13 @@ function buildSeason(raw, players, isNewest, later, format, opts) {
     if (curve) p.expected = curve(p.pick_no);
     else p.expected = mean(picks.filter(q => Math.abs(q.pick_no - p.pick_no) <= 6).map(q => q.vor));
   });
+  // Redraft: blend in hindsight, so the Nth pick is also held to the Nth-best player's value this season.
+  // The slot curve alone averages pick 1 with picks up to 8 spots later, which sets a soft bar for the top picks.
+  const hw = format === 'dynasty' ? 0 : (CONFIG.draftHindsight || 0);
+  if (hw > 0) {
+    const best = Object.keys(playerPts).filter(pid => replacement[posOf(pid)]).map(aboveRepl).sort((a, b) => b - a);
+    picks.forEach(p => { p.expected = (1 - hw) * p.expected + hw * (best[p.pick_no - 1] || 0); });
+  }
   smoothBySlot(picks);
   // The curve sets the shape (how value falls off by pick); re-centering keeps each draft's picks
   // averaging zero, so a strong or weak season overall doesn't push every team up or down.

@@ -23,7 +23,7 @@ Each part is scored against the rest of the league that season (50 = average), t
 | Start/sit | 20% | Points started ÷ points from the best possible lineup |
 | Waivers | 15% | Starter points from waiver and free-agent pickups |
 | Trades | 20% | Starter points gained minus starter points given up |
-| Draft | 10% | Each pick's points above a replacement-level starter at its position, compared with picks around the same slot |
+| Draft | 10% | Each pick's points above a replacement-level starter at its position, compared with what the slot was expected to give: 70% picks around the same slot across the league's drafts, 30% the Nth-best player that season for pick N (`draftHindsight` in config.js) |
 
 The career score averages every season, weighted by games played.
 
