@@ -1,7 +1,7 @@
 // Turns raw Sleeper data into every stat, award and score the site shows.
 // Pure functions only: nothing here touches the page or the network.
 
-import { CONFIG } from './config.js?v=202610302140';
+import { CONFIG } from './config.js?v=202610302200';
 
 const ELIGIBLE = {
   QB: ['QB'], RB: ['RB'], WR: ['WR'], TE: ['TE'], K: ['K'], DEF: ['DEF'],
@@ -200,6 +200,7 @@ function buildSeason(raw, players, isNewest, later, format, opts) {
   const eff = {};
   rids.forEach(r => { eff[r] = { actual: 0, optimal: 0, benchLeft: 0 }; });
   let blunder = null;
+  const blunders = []; // every week a lineup left points on the bench, for the all-time rankings
   const effWeeks = scoredWeeks.map(w => ({ w, rids })).concat(
     games.filter(g => g.playoff).map(g => ({ w: g.week, rids: [g.a, g.b] }))
   );
@@ -216,14 +217,15 @@ function buildSeason(raw, players, isNewest, later, format, opts) {
       eff[r].benchLeft += gap;
       const game = games.find(g => g.week === w && (g.a === r || g.b === r));
       const oppPts = game ? (game.a === r ? game.bp : game.ap) : null;
-      if (!blunder || gap > blunder.gap) {
-        blunder = { rid: r, week: w, gap, lostBy: oppPts != null && oppPts > m.points ? oppPts - m.points : null, wouldHaveWon: oppPts != null && oppPts > m.points && m.points + gap > oppPts };
-      }
+      const b = { rid: r, week: w, gap, lostBy: oppPts != null && oppPts > m.points ? oppPts - m.points : null, wouldHaveWon: oppPts != null && oppPts > m.points && m.points + gap > oppPts };
+      if (gap > 0) blunders.push(b);
+      if (!blunder || gap > blunder.gap) blunder = b;
     });
   });
   rids.forEach(r => { eff[r].pct = eff[r].optimal > 0 ? eff[r].actual / eff[r].optimal : 0; });
   S.efficiency = eff;
   S.benchBlunder = blunder;
+  S.blunders = blunders;
 
   // Starter points a player gave a roster from a given week on, while he stayed there.
   const allWeeks = [];

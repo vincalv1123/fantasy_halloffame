@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610302140';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610302140';
-import { buildModel, optimalPoints } from './model.js?v=202610302140';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610302140';
+import { CONFIG } from './config.js?v=202610302200';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610302200';
+import { buildModel, optimalPoints } from './model.js?v=202610302200';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610302200';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -136,6 +136,30 @@ function openTrade(i) {
   if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
   const c = dlg.querySelector('.close'); if (c) c.focus();
 }
+// All-time rankings popup: the top (or bottom) 5 behind a bests & worsts card. Rows open their trade, draft or game.
+let RANKS = {};
+function openRank(key) {
+  const R = RANKS[key];
+  if (!R) return;
+  let dlg = document.getElementById('rank-modal');
+  if (!dlg) {
+    dlg = document.createElement('dialog');
+    dlg.id = 'rank-modal';
+    dlg.className = 'modal trade';
+    dlg.setAttribute('aria-labelledby', 'rank-title');
+    document.body.appendChild(dlg);
+    dlg.addEventListener('click', e => { if (e.target === dlg || e.target.closest('[data-close]')) dlg.close(); });
+  }
+  dlg.innerHTML = `<div class="modal-card">
+    <div class="line2" style="align-items:center"><h2 id="rank-title" style="font-size:18px">${R.title}</h2>
+      <button type="button" class="close" data-close aria-label="Close">✕</button></div>
+    <div class="rows">${R.rows}</div>
+    <p class="note" style="margin:0">Finished seasons. Tap a row for the details.</p>
+  </div>`;
+  if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
+  const c = dlg.querySelector('.close'); if (c) c.focus();
+}
+document.addEventListener('click', e => { const b = e.target.closest('[data-rank]'); if (b) { e.preventDefault(); openRank(b.dataset.rank); } });
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-trade]');
   if (b) { e.preventDefault(); openTrade(Number(b.dataset.trade)); }
@@ -258,45 +282,68 @@ function viewAll() {
     out.push(section(html));
   }
 
-  // All-time bests and worsts.
+  // All-time bests and worsts. Each single-play card opens its top 5 (or bottom 5); each career card drops down to every manager.
   const done2 = completed();
   const flat = f => [].concat.apply([], done2.map(f));
-  const bestAdd = flat(S => [].concat.apply([], S.rids.map(r => (S.waivers[r].list || []).map(x => ({ S, r, ...x }))))).sort((p, q) => q.pts - p.pts)[0];
-  const steal = done2.filter(S => S.steal).map(S => ({ S, p: S.steal })).sort((p, q) => q.p.value - p.p.value)[0];
-  const bust = done2.filter(S => S.bust).map(S => ({ S, p: S.bust })).sort((p, q) => p.p.value - q.p.value)[0];
-  const blunder = done2.filter(S => S.benchBlunder && S.benchBlunder.gap > 0).map(S => ({ S, b: S.benchBlunder })).sort((p, q) => q.b.gap - p.b.gap)[0];
   const hdr = (t, cls) => `<span class="note${cls ? ' ' + cls : ''}" style="text-transform:uppercase;letter-spacing:.05em;font-size:11px">${t}</span>`;
+  const gradeTag = g => (g ? `<span class="grade sm" style="background:${GRADE_COLORS[g]};margin-right:8px">${g}</span>` : '');
+  const pickups = flat(S => [].concat.apply([], S.rids.map(r => (S.waivers[r].list || []).map(x => ({ S, r, ...x }))))).sort((p, q) => q.pts - p.pts).slice(0, 5);
+  const finished = new Set(done2.map(S => S.season));
+  const wins = [].concat.apply([], M.allTrades.filter(t => finished.has(t.season)).map(t => t.sides.map(sd => ({ t, sd })))).sort((p, q) => q.sd.net - p.sd.net).slice(0, 5);
+  const steals = flat(S => (S.steal ? S.picks.filter(p => p.pos !== 'K' && p.pos !== 'DEF').map(p => ({ S, p })) : [])).sort((p, q) => q.p.value - p.p.value).slice(0, 5);
+  const busts = flat(S => (S.bust ? S.picks.filter(p => p.round <= 3).map(p => ({ S, p })) : [])).sort((p, q) => p.p.value - q.p.value).slice(0, 5);
+  const blunders = flat(S => (S.blunders || []).map(b => ({ S, b }))).sort((p, q) => q.b.gap - p.b.gap).slice(0, 5);
+  // Each ranking: its card (the No. 1) and the rows its popup lists.
+  RANKS = {};
   const cards = [];
-  if (bestAdd) cards.push(`<a class="box" href="${mlink(bestAdd.S.ownerOf[bestAdd.r])}@${bestAdd.S.season}" style="text-decoration:none">${hdr('Best waiver pickup', 'up')}
-    <div class="line2"><span style="font-weight:600">${player(bestAdd.pid)} <span class="note">${esc(M.playerPos(bestAdd.pid))}</span></span><span class="num up">${signed(bestAdd.pts)} over repl.</span></div>
-    <span class="note">${name(bestAdd.S.ownerOf[bestAdd.r])} · ${bestAdd.S.season} · added Week ${bestAdd.week}${bestAdd.bid ? ' for $' + bestAdd.bid : ''} · ${f1(bestAdd.raw)} pts in ${bestAdd.starts} start${bestAdd.starts === 1 ? '' : 's'}</span></a>`);
-  if (heist && heist.side.net > 0) {
-    const others = heist.trade.sides.filter(s => s.owner !== heist.side.owner).map(s => name(s.owner)).join(' & ');
-    cards.push(`<button type="button" class="box tradebtn"${tradeAttr(heist.trade)}>${hdr('Best trade win · tap for details', 'up')}
-      <div class="line2"><span style="font-weight:600">${name(heist.side.owner)} over ${others}</span><span style="display:flex;align-items:center">${heist.side.grade ? `<span class="grade sm" style="background:${GRADE_COLORS[heist.side.grade]};margin-right:8px">${heist.side.grade}</span>` : ''}<span class="num up">${signed(heist.side.net)}</span></span></div>
-      <span class="note">${heist.trade.season} · ${tradeWhen(heist.trade)} · got ${heist.side.got.map(g => player(g.pid)).join(', ') || 'picks'} · ${LG.format === 'dynasty' ? 'starter pts gained, including later seasons' : 'value over replacement gained, rest of season'}</span></button>`);
-  }
-  if (steal) cards.push(`<button type="button" class="box tradebtn" data-draft-team="${steal.S.season}:${steal.p.roster_id}">${hdr('Best steal of the draft · tap for the draft', 'up')}
-    <div class="line2"><span style="font-weight:600">${player(steal.p.player_id)} <span class="note">${esc(steal.p.pos)}</span></span><span class="num up">R${steal.p.round} → ${esc(steal.p.pos)}${steal.S.posRank[steal.p.player_id]}</span></div>
-    <span class="note">${name(steal.S.ownerOf[steal.p.roster_id])} · ${steal.S.season} · pick ${steal.p.pick_no} · ${f1(steal.p.pts)} pts</span></button>`);
-  if (bust) cards.push(`<button type="button" class="box tradebtn" data-draft-team="${bust.S.season}:${bust.p.roster_id}">${hdr('Worst bust of the draft · tap for the draft', 'down')}
-    <div class="line2"><span style="font-weight:600">${player(bust.p.player_id)} <span class="note">${esc(bust.p.pos)}</span></span><span class="num down">R${bust.p.round} → ${esc(bust.p.pos)}${bust.S.posRank[bust.p.player_id] || '—'}</span></div>
-    <span class="note">${name(bust.S.ownerOf[bust.p.roster_id])} · ${bust.S.season} · pick ${bust.p.pick_no} · ${f1(bust.p.pts)} pts</span></button>`);
-  if (blunder) { const key = gameKey(blunder.S, blunder.b.week, blunder.b.rid);
-    cards.push(`<button type="button" class="box tradebtn"${key ? ` data-matchup="${key}"` : ''}>${hdr('Worst bench blunder · tap for the lineups', 'down')}
-    <div class="line2"><span style="font-weight:600">${name(blunder.S.ownerOf[blunder.b.rid])}</span><span class="num down">${f1(blunder.b.gap)} pts</span></div>
-    <span class="note">${blunder.S.season} · Week ${blunder.b.week} · left on the bench${blunder.b.wouldHaveWon ? ' · would have won' : blunder.b.lostBy != null ? ' · lost by ' + f1(blunder.b.lostBy) : ''}</span></button>`); }
-  // Career bests and worsts: waivers, trades and the draft (redraft).
+  const rankCard = (key, title, cls, list, card, row) => {
+    if (!list.length) return;
+    RANKS[key] = { title, rows: list.map((x, i) => row(x, i + 1)).join('') };
+    cards.push(`<button type="button" class="box tradebtn" data-rank="${key}">${hdr(title + ' · tap for the ' + (cls === 'up' ? 'top' : 'bottom') + ' ' + list.length, cls)}${card(list[0])}</button>`);
+  };
+  const rrow = (n, attrs, main, sub, val, cls) => `<button type="button" class="row rowbtn" ${attrs} style="grid-template-columns:28px minmax(0,1fr) auto;text-align:left;width:100%">
+    <span class="year">${n}</span><span class="stack"><span class="name" style="font-size:14px">${main}</span><span class="sub">${sub}</span></span><span class="num ${cls}" style="font-size:14px;display:flex;align-items:center">${val}</span></button>`;
+  rankCard('pickup', 'Best waiver pickup', 'up', pickups,
+    x => `<div class="line2"><span style="font-weight:600">${player(x.pid)} <span class="note">${esc(M.playerPos(x.pid))}</span></span><span class="num up">${signed(x.pts)} over repl.</span></div>
+      <span class="note">${name(x.S.ownerOf[x.r])} · ${x.S.season} · added Week ${x.week}${x.bid ? ' for $' + x.bid : ''} · ${f1(x.raw)} pts in ${x.starts} start${x.starts === 1 ? '' : 's'}</span>`,
+    (x, n) => `<a class="row" href="${mlink(x.S.ownerOf[x.r])}@${x.S.season}" data-close style="grid-template-columns:28px minmax(0,1fr) auto;text-decoration:none">
+      <span class="year">${n}</span><span class="stack"><span class="name" style="font-size:14px">${player(x.pid)} <span class="note">${esc(M.playerPos(x.pid))}</span></span><span class="sub">${name(x.S.ownerOf[x.r])} · ${x.S.season} · Week ${x.week}${x.bid ? ' · $' + x.bid : ''} · ${f1(x.raw)} pts in ${x.starts} start${x.starts === 1 ? '' : 's'}</span></span><span class="num up" style="font-size:14px">${signed(x.pts)}</span></a>`);
+  const others = x => x.t.sides.filter(o => o.owner !== x.sd.owner).map(o => name(o.owner)).join(' & ');
+  rankCard('trade', 'Best trade win', 'up', wins.filter(x => x.sd.net > 0),
+    x => `<div class="line2"><span style="font-weight:600">${name(x.sd.owner)} over ${others(x)}</span><span style="display:flex;align-items:center">${gradeTag(x.sd.grade)}<span class="num up">${signed(x.sd.net)}</span></span></div>
+      <span class="note">${x.t.season} · ${tradeWhen(x.t)} · got ${x.sd.got.map(g => player(g.pid)).join(', ') || 'picks'} · ${LG.format === 'dynasty' ? 'starter pts gained, including later seasons' : 'value over replacement gained, rest of season'}</span>`,
+    (x, n) => rrow(n, tradeAttr(x.t), `${name(x.sd.owner)} over ${others(x)}`, `${x.t.season} · ${tradeWhen(x.t)} · got ${x.sd.got.map(g => player(g.pid)).join(', ') || 'picks'}`, gradeTag(x.sd.grade) + signed(x.sd.net), 'up'));
+  const pickRow = cls => (x, n) => rrow(n, `data-draft-team="${x.S.season}:${x.p.roster_id}"`, `${player(x.p.player_id)} <span class="note">${esc(x.p.pos)}</span>`,
+    `${name(x.S.ownerOf[x.p.roster_id])} · ${x.S.season} · pick ${x.p.pick_no} · finished ${esc(x.p.pos)}${x.S.posRank[x.p.player_id] || '—'} · ${f1(x.p.pts)} pts`, signed(x.p.value, 0) + ' vs. slot', cls);
+  rankCard('steal', 'Best steal of the draft', 'up', steals,
+    x => `<div class="line2"><span style="font-weight:600">${player(x.p.player_id)} <span class="note">${esc(x.p.pos)}</span></span><span class="num up">R${x.p.round} → ${esc(x.p.pos)}${x.S.posRank[x.p.player_id]}</span></div>
+      <span class="note">${name(x.S.ownerOf[x.p.roster_id])} · ${x.S.season} · pick ${x.p.pick_no} · ${f1(x.p.pts)} pts</span>`, pickRow('up'));
+  rankCard('bust', 'Worst bust of the draft', 'down', busts,
+    x => `<div class="line2"><span style="font-weight:600">${player(x.p.player_id)} <span class="note">${esc(x.p.pos)}</span></span><span class="num down">R${x.p.round} → ${esc(x.p.pos)}${x.S.posRank[x.p.player_id] || '—'}</span></div>
+      <span class="note">${name(x.S.ownerOf[x.p.roster_id])} · ${x.S.season} · pick ${x.p.pick_no} · ${f1(x.p.pts)} pts</span>`, pickRow('down'));
+  const blunderNote = b => (b.wouldHaveWon ? ' · would have won' : b.lostBy != null ? ' · lost by ' + f1(b.lostBy) : '');
+  rankCard('blunder', 'Worst bench blunder', 'down', blunders,
+    x => `<div class="line2"><span style="font-weight:600">${name(x.S.ownerOf[x.b.rid])}</span><span class="num down">${f1(x.b.gap)} pts</span></div>
+      <span class="note">${x.S.season} · Week ${x.b.week} · left on the bench${blunderNote(x.b)}</span>`,
+    (x, n) => { const key = gameKey(x.S, x.b.week, x.b.rid);
+      return rrow(n, key ? `data-matchup="${key}"` : '', name(x.S.ownerOf[x.b.rid]), `${x.S.season} · Week ${x.b.week} · left on the bench${blunderNote(x.b)}`, f1(x.b.gap) + ' pts', 'down'); });
+
+  // Career: waivers, trades and draft value (redraft). One card each with the best and worst; it drops down to every manager.
   if (LG.format !== 'dynasty' && done2.length) {
     const a = allTimeTotals();
-    const card = (x, title, cls, v, d) => { if (x) cards.push(`<a class="box" href="${mlink(x.id)}" style="text-decoration:none">${hdr(title, cls)}
-      <div class="line2"><span style="font-weight:600">${name(x.id)}</span><span class="num ${cls}">${v}</span></div><span class="note">${d}</span></a>`); };
-    card(a.waiverBest, 'All-time Waiver Wire King', 'up', a.waiverBest && signed(a.waiverBest.waiver) + ' over repl.', a.waiverBest && a.waiverBest.adds + ' pickups, career');
-    card(a.waiverWorst, 'All-time worst on the wire', 'down', a.waiverWorst && signed(a.waiverWorst.waiver) + ' over repl.', a.waiverWorst && a.waiverWorst.adds + ' pickups, career');
-    card(a.tradeBest, 'Best career trade +/−', 'up', a.tradeBest && signed(a.tradeBest.trade), a.tradeBest && a.tradeBest.trades + ' trades · value got minus value given');
-    card(a.tradeWorst, 'Worst career trade +/−', 'down', a.tradeWorst && signed(a.tradeWorst.trade), a.tradeWorst && a.tradeWorst.trades + ' trades · value got minus value given');
-    card(a.draftBest, 'Most career draft value vs. slot', 'up', a.draftBest && signed(a.draftBest.draft, 0), a.draftBest && a.draftBest.picks + ' picks in ' + a.draftBest.drafts + ' drafts');
-    card(a.draftWorst, 'Least career draft value vs. slot', 'down', a.draftWorst && signed(a.draftWorst.draft, 0), a.draftWorst && a.draftWorst.picks + ' picks in ' + a.draftWorst.drafts + ' drafts');
+    const career = (title, k, ok, fmt, detail) => {
+      const list = a.list.filter(ok || (() => true)).sort((p, q) => q[k] - p[k]);
+      if (!list.length) return;
+      const best = list[0]; const worst = list[list.length - 1];
+      cards.push(`<details class="box career-dd"><summary style="list-style:none;cursor:pointer">${hdr(title + ' · tap for every manager')}
+        <div class="line2" style="margin-top:4px"><span><span class="note up">Best</span> <span style="font-weight:600">${name(best.id)}</span></span><span class="num ${sign(best[k])}">${fmt(best[k])}</span></div>
+        <div class="line2"><span><span class="note down">Worst</span> <span style="font-weight:600">${name(worst.id)}</span></span><span class="num ${sign(worst[k])}">${fmt(worst[k])}</span></div></summary>
+        <div class="rows" style="margin-top:8px">${list.map((x, i) => `<a class="row" href="${mlink(x.id)}" style="grid-template-columns:28px minmax(0,1fr) auto;text-decoration:none">
+          <span class="year">${i + 1}</span><span class="stack"><span class="name" style="font-size:14px">${name(x.id)}</span><span class="sub">${detail(x)}</span></span><span class="num ${sign(x[k])}" style="font-size:14px">${fmt(x[k])}</span></a>`).join('')}</div></details>`);
+    };
+    career('Waivers, career', 'waiver', null, v => signed(v) + ' over repl.', x => x.adds + ' pickup' + (x.adds === 1 ? '' : 's'));
+    career('Trade +/−, career', 'trade', x => x.trades > 0, v => signed(v), x => x.trades + ' trade' + (x.trades === 1 ? '' : 's') + ' · value got minus value given');
+    career('Draft value vs. slot, career', 'draft', x => x.drafts > 0, v => signed(v, 0), x => x.picks + ' picks in ' + x.drafts + ' draft' + (x.drafts === 1 ? '' : 's'));
   }
   if (cards.length) out.push(section(`<div class="head"><h2>All-time bests &amp; worsts</h2><span class="note">Finished seasons</span></div><div style="display:flex;flex-direction:column;gap:10px">${cards.join('')}</div>
     <span class="note">Waiver pickups count points above a replacement-level starter at their position for every start.</span>`));
@@ -1647,6 +1694,7 @@ function allTimeTotals() {
   const pick = (k, dir, ok) => list.filter(ok || (() => true)).sort((a, b) => dir * (b[k] - a[k]))[0] || null;
   const hasTrades = x => x.trades > 0; const hasDrafts = x => x.drafts > 0;
   return {
+    list,
     waiverBest: pick('waiver', 1), waiverWorst: pick('waiver', -1),
     tradeBest: pick('trade', 1, hasTrades), tradeWorst: pick('trade', -1, hasTrades),
     draftBest: pick('draft', 1, hasDrafts), draftWorst: pick('draft', -1, hasDrafts)

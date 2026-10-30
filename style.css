@@ -409,3 +409,7 @@ button.tile.tbtn:hover, button.tile.tbtn:focus-visible { background: var(--panel
 .tag-trade:hover { color: var(--fg); border-color: var(--fg-2); }
 .tag-trade.static { cursor: default; }
 .award-desc { margin: 0 0 4px; font-size: 13px; line-height: 1.5; color: var(--fg-2); }
+
+/* All-time career dropdowns: the summary is the card itself, no disclosure marker. */
+.career-dd > summary::-webkit-details-marker { display: none; }
+.career-dd[open] > summary .note:first-child { color: var(--muted); }
