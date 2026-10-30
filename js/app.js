@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610300648';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610300648';
-import { buildModel, optimalPoints } from './model.js?v=202610300648';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610300648';
+import { CONFIG } from './config.js?v=202610300650';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610300650';
+import { buildModel, optimalPoints } from './model.js?v=202610300650';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610300650';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -1567,6 +1567,28 @@ document.addEventListener('click', e => {
 });
 
 // ---------- Awards history ----------
+// What each award means, shown at the top of its dropdown on the Awards page.
+function awardDesc(key) {
+  const dyn = LG.format === 'dynasty';
+  return ({
+    champion: 'Won the championship game.',
+    runnerUp: 'Made the championship game and lost it.',
+    regSeason: 'Best regular-season record (points for breaks ties), which also means the No. 1 playoff seed.',
+    bestMgr: 'Highest Manager Score that season: results, start/sit, waivers and trades' + (dyn ? '' : ', plus the draft') + ', each compared with the rest of the league.',
+    worstMgr: 'Lowest Manager Score that season.',
+    waiver: 'Most points above replacement from waiver and free-agent pickups, counting every week they started for the team.',
+    trade: 'The single trade that gained the most starter points that season compared with what was given up.',
+    steal: 'The draft pick that beat his draft slot by the most (kickers and defenses don\'t count).',
+    scout: 'Most points above replacement that season from the manager\'s own rookie-draft picks still in their first three seasons, with elite seasons counting extra. Once a season ends, its winner never changes.',
+    bust: 'The round 1–3 pick that fell furthest short of his draft slot.',
+    highScore: 'Highest single-week score of the season.',
+    luckiest: 'Most wins above expected: won more games than his weekly scores deserved.',
+    unluckiest: 'Most wins below expected: lost more games than his weekly scores deserved.',
+    blunder: 'Most points left on the bench in a single week compared with the best possible lineup.',
+    sacko: dyn ? 'Worst regular-season record (points for breaks ties).' : 'Lost the toilet bowl, the consolation bracket for the teams that missed the playoffs. Before toilet bowls, the worst record.'
+  })[key] || '';
+}
+
 const AWARD_ORDER = ['champion', 'runnerUp', 'regSeason', 'bestMgr', 'waiver', 'trade', 'steal', 'scout', 'highScore', 'luckiest', 'worstMgr', 'bust', 'unluckiest', 'blunder', 'sacko'];
 function viewAwards() {
   const bySeason = M.seasons.map(S => ({ S, list: seasonAwards(S) }));
@@ -1595,7 +1617,7 @@ function viewAwards() {
     const entries = bySeason.map(({ S, list }) => ({ S, a: list.find(x => x.key === key) })).filter(x => x.a);
     const tier = key === 'sacko' ? 'sacko' : entries[0].a.major ? 'major' : entries[0].a.good ? 'good' : 'bad';
     return `<details class="calc aw-${tier}"${key === 'champion' || key === 'sacko' ? ' open' : ''}><summary><span style="display:flex;align-items:center;gap:8px"><span class="dot"></span>${esc(seen[key])}</span></summary>
-      <div class="calc-body" style="padding-top:4px"><div class="rows">${entries.map(({ S, a }) => `<a class="row" href="${mlink(S.ownerOf[a.rid])}@${S.season}" style="grid-template-columns:52px minmax(0,1fr) auto">
+      <div class="calc-body" style="padding-top:4px">${awardDesc(key) ? `<p class="award-desc">${awardDesc(key)}</p>` : ''}<div class="rows">${entries.map(({ S, a }) => `<a class="row" href="${mlink(S.ownerOf[a.rid])}@${S.season}" style="grid-template-columns:52px minmax(0,1fr) auto">
         <span class="year">${S.season}</span><span class="stack"><span class="name" style="font-size:14px">${name(S.ownerOf[a.rid])}${S.isCurrent ? ' <span class="note">so far</span>' : ''}</span><span class="sub">${a.d}</span></span>
         <span class="num" style="font-size:14px">${a.v}</span></a>`).join('')}</div></div></details>`;
   };
