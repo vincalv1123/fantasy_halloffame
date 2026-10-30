@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610302110';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610302110';
-import { buildModel, optimalPoints } from './model.js?v=202610302110';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610302110';
+import { CONFIG } from './config.js?v=202610302125';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610302125';
+import { buildModel, optimalPoints } from './model.js?v=202610302125';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610302125';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -120,7 +120,7 @@ function openTrade(i) {
       <button type="button" class="close" data-close aria-label="Close">✕</button></div>
     <div class="tsides">${t.sides.map(s => { const id = ownerOf(s);
       return `<div class="side"><div class="line2"><a class="name" href="${mlink(id)}" style="text-decoration:none" data-close>${name(id)}</a>
-        <span class="num ${sign(s.net)}" style="font-size:16px">${signed(s.net)}</span></div>
+        <span style="display:flex;align-items:center">${s.grade ? `<span class="grade sm" style="background:${GRADE_COLORS[s.grade]};margin-right:8px">${s.grade}</span>` : ''}<span class="num ${sign(s.net)}" style="font-size:16px">${signed(s.net)}</span></span></div>
         ${t.valueMode ? `<div class="note" style="margin:2px 0 6px">Got ${f1(s.valueIn)} · gave ${f1(s.valueOut)}</div>` : ''}
         <span class="note" style="text-transform:uppercase;letter-spacing:.05em;font-size:11px">Received</span>
         <div class="rows">${s.got.map(g => `<div class="row" style="grid-template-columns:minmax(0,1fr) auto;padding:9px 0">
@@ -131,7 +131,7 @@ function openTrade(i) {
       ? (t.draftDay
         ? 'A draft-day pick trade. Each pick is worth the points above a replacement-level starter that a pick in that slot is expected to give (the same number the draft grades use, never below 0). The number by each name is value got minus value given.'
         : 'Judged in a vacuum: each player is worth his points above a replacement-level starter at his position for the rest of the season after the trade (every game he played, for any team), never below 0. So depth near replacement level adds little, and one star beats two average players. The number by each name is value got minus value given; pts and g = his rest-of-season points and games.')
-      : 'Pts = starter points each player scored for his new team after the trade' + (dynasty ? ', including later seasons while he stayed' : ', rest of that season') + '. The number by each name is the net. Picks count as 0.'}</p>
+      : 'Pts = starter points each player scored for his new team after the trade' + (dynasty ? ', including later seasons while he stayed' : ', rest of that season') + '. The number by each name is the net. Picks count as 0.'} Grade: each side against every trade side in this league\u2019s history (A = one of its most lopsided wins, C = about even, F = one of its worst losses).</p>
   </div>`;
   if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
   const c = dlg.querySelector('.close'); if (c) c.focus();
@@ -273,7 +273,7 @@ function viewAll() {
   if (heist && heist.side.net > 0) {
     const others = heist.trade.sides.filter(s => s.owner !== heist.side.owner).map(s => name(s.owner)).join(' & ');
     cards.push(`<button type="button" class="box tradebtn"${tradeAttr(heist.trade)}>${hdr('Best trade win · tap for details', 'up')}
-      <div class="line2"><span style="font-weight:600">${name(heist.side.owner)} over ${others}</span><span class="num up">${signed(heist.side.net)}</span></div>
+      <div class="line2"><span style="font-weight:600">${name(heist.side.owner)} over ${others}</span><span style="display:flex;align-items:center">${heist.side.grade ? `<span class="grade sm" style="background:${GRADE_COLORS[heist.side.grade]};margin-right:8px">${heist.side.grade}</span>` : ''}<span class="num up">${signed(heist.side.net)}</span></span></div>
       <span class="note">${heist.trade.season} · ${tradeWhen(heist.trade)} · got ${heist.side.got.map(g => player(g.pid)).join(', ') || 'picks'} · ${LG.format === 'dynasty' ? 'starter pts gained, including later seasons' : 'value over replacement gained, rest of season'}</span></button>`);
   }
   if (steal) cards.push(`<button type="button" class="box tradebtn" data-draft-team="${steal.S.season}:${steal.p.roster_id}">${hdr('Best steal of the draft · tap for the draft', 'up')}
@@ -594,7 +594,7 @@ function viewSeason(S) {
       <div style="display:flex;flex-direction:column;gap:10px">${S.trades.slice().reverse().map(t => `<button type="button" class="box tradebtn"${tradeAttr(t)}><div class="top-line"><span>${tradeWhen(t)}</span><span>Tap for details</span></div>
       ${t.sides.map(s => `<div class="line2"><span style="font-size:14px;min-width:0"><span style="font-weight:500">${nm(s.rid)}</span>
         <span style="color:#8A9C9F"> got ${s.got.map(g => player(g.pid)).join(', ') || 'draft picks'}</span></span>
-        <span class="num ${sign(s.net)}" style="font-size:14px;white-space:nowrap">${signed(s.net)}</span></div>`).join('')}</button>`).join('')}</div></div></details>`));
+        <span style="display:flex;align-items:center;white-space:nowrap">${s.grade ? `<span class="grade sm" style="background:${GRADE_COLORS[s.grade]};margin-right:8px">${s.grade}</span>` : ''}<span class="num ${sign(s.net)}" style="font-size:14px">${signed(s.net)}</span></span></div>`).join('')}</button>`).join('')}</div></div></details>`));
   }
 
   out.push(ddSection('Team MVPs', 'Most starter points for each team', `<div class="rows">

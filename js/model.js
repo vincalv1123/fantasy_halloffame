@@ -1,7 +1,7 @@
 // Turns raw Sleeper data into every stat, award and score the site shows.
 // Pure functions only: nothing here touches the page or the network.
 
-import { CONFIG } from './config.js?v=202610302110';
+import { CONFIG } from './config.js?v=202610302125';
 
 const ELIGIBLE = {
   QB: ['QB'], RB: ['RB'], WR: ['WR'], TE: ['TE'], K: ['K'], DEF: ['DEF'],
@@ -959,6 +959,13 @@ export function buildModel(data, format) {
     .sort((p, q) => (q.games - Math.abs(q.aw - q.bw) * 1.5 + q.playoff) - (p.games - Math.abs(p.aw - p.bw) * 1.5 + p.playoff))[0] || null;
 
   // Every trade, all seasons, with owner ids.
+  // Trade grades: each side's net against every trade side in this league's history.
+  // A = one of the most lopsided wins, C = about even, F = one of the worst losses.
+  const tradeSides = [].concat.apply([], seasons.map(S => [].concat.apply([], S.trades.map(t => t.sides))));
+  if (tradeSides.length) {
+    const nets = tradeSides.map(x => x.net); const mu = mean(nets); const spread = sd(nets) || 1;
+    tradeSides.forEach(x => { x.z = (x.net - mu) / spread; x.grade = x.z >= 1 ? 'A' : x.z >= 0.33 ? 'B' : x.z >= -0.33 ? 'C' : x.z >= -1 ? 'D' : 'F'; });
+  }
   const allTrades = [].concat.apply([], seasons.map(S => S.trades.map(t => ({ ...t, sides: t.sides.map(s => ({ ...s, owner: S.ownerOf[s.rid] })) }))));
   let heist = null;
   allTrades.forEach(t => t.sides.forEach(s => { if (!heist || s.net > heist.side.net) heist = { trade: t, side: s }; }));
