@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610300420';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610300420';
-import { buildModel, optimalPoints } from './model.js?v=202610300420';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610300420';
+import { CONFIG } from './config.js?v=202610300438';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610300438';
+import { buildModel, optimalPoints } from './model.js?v=202610300438';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610300438';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -218,21 +218,56 @@ function viewAll() {
         <span class="note">Regular season, all years. Luck = wins minus expected wins.</span></div></details>`));
   }
 
+  // Rivalries: the closest (most games, tightest series, playoff meetings) and the most lopsided.
   const riv = M.rivalry; const heist = M.heist;
-  if (riv || heist) {
-    let html = '<h2>Rivalries &amp; trades</h2>';
-    if (riv) html += `<a class="box" href="${PX}vs-${encodeURIComponent(riv.a)}~${encodeURIComponent(riv.b)}" style="text-decoration:none">
-      <span class="k note" style="text-transform:uppercase;letter-spacing:.05em;font-size:11px">Fiercest rivalry</span>
-      <div class="line2"><span class="name" style="font-weight:600">${name(riv.a)} vs ${name(riv.b)}</span><span class="num">${wl(riv.aw, riv.bw, riv.t)}</span></div>
-      <span class="note">${riv.games} games · average margin ${f1(riv.margin / riv.games)} pts${riv.playoff ? ' · ' + riv.playoff + ' playoff meeting' + (riv.playoff > 1 ? 's' : '') : ''}</span></a>`;
-    if (heist && heist.side.net > 0) {
-      const others = heist.trade.sides.filter(s => s.owner !== heist.side.owner).map(s => name(s.owner)).join(' & ');
-      html += `<button type="button" class="box tradebtn"${tradeAttr(heist.trade)}><span class="note" style="text-transform:uppercase;letter-spacing:.05em;font-size:11px">Biggest trade heist · tap for details</span>
-        <div class="line2"><span style="font-weight:600">${name(heist.side.owner)} over ${others}</span><span class="num up">${signed(heist.side.net)}</span></div>
-        <span class="note">${heist.trade.season} · Week ${heist.trade.week} · got ${heist.side.got.map(g => player(g.pid)).join(', ') || 'picks'} · starter pts gained, ${LG.format === 'dynasty' ? 'including later seasons' : 'rest of season'}</span></button>`;
-    }
+  const pairs = Object.values(M.h2h).filter(x => x.games >= 3);
+  // Lopsided score = win gap × the leader's win share, so 6–0 beats 8–2, and 8–2 beats 3–0.
+  const lop = pairs.map(x => { const lead = x.aw >= x.bw; const w = Math.max(x.aw, x.bw); const l = Math.min(x.aw, x.bw);
+    return { x, top: lead ? x.a : x.b, bot: lead ? x.b : x.a, w, l, score: (w - l) * (w / x.games) }; })
+    .filter(p => p.w > p.l).sort((p, q) => q.score - p.score || q.w - p.w || q.x.margin - p.x.margin)[0] || null;
+  const rivCard = (label, top, bot, rec, note) => `<a class="box" href="${PX}vs-${encodeURIComponent(top)}~${encodeURIComponent(bot)}" style="text-decoration:none">
+      <span class="k note" style="text-transform:uppercase;letter-spacing:.05em;font-size:11px">${label}</span>
+      <div class="line2"><span class="name" style="font-weight:600">${name(top)} vs ${name(bot)}</span><span class="num">${rec}</span></div>
+      <span class="note">${note}</span></a>`;
+  if (riv || lop) {
+    let html = '<h2>Rivalries</h2>';
+    if (riv) html += rivCard('Closest rivalry', riv.a, riv.b, wl(riv.aw, riv.bw, riv.t),
+      `${riv.games} games · average margin ${f1(riv.margin / riv.games)} pts${riv.playoff ? ' · ' + riv.playoff + ' playoff meeting' + (riv.playoff > 1 ? 's' : '') : ''}`);
+    if (lop) html += rivCard('Most lopsided rivalry', lop.top, lop.bot, wl(lop.w, lop.l, lop.x.t),
+      `${name(lop.top)} has won ${Math.round(lop.w / lop.x.games * 100)}% of ${lop.x.games} games · average margin ${f1(lop.x.margin / lop.x.games)} pts`);
+    html += '<span class="note">Closest = most games, tightest series and playoff meetings (needs 3+ games). Most lopsided = win gap × the leader\'s win share. Tap one for the full head-to-head.</span>';
     out.push(section(html));
   }
+
+  // All-time bests and worsts.
+  const done2 = completed();
+  const flat = f => [].concat.apply([], done2.map(f));
+  const bestAdd = flat(S => [].concat.apply([], S.rids.map(r => (S.waivers[r].list || []).map(x => ({ S, r, ...x }))))).sort((p, q) => q.pts - p.pts)[0];
+  const steal = done2.filter(S => S.steal).map(S => ({ S, p: S.steal })).sort((p, q) => q.p.value - p.p.value)[0];
+  const bust = done2.filter(S => S.bust).map(S => ({ S, p: S.bust })).sort((p, q) => p.p.value - q.p.value)[0];
+  const blunder = done2.filter(S => S.benchBlunder && S.benchBlunder.gap > 0).map(S => ({ S, b: S.benchBlunder })).sort((p, q) => q.b.gap - p.b.gap)[0];
+  const hdr = (t, cls) => `<span class="note${cls ? ' ' + cls : ''}" style="text-transform:uppercase;letter-spacing:.05em;font-size:11px">${t}</span>`;
+  const cards = [];
+  if (bestAdd) cards.push(`<a class="box" href="${mlink(bestAdd.S.ownerOf[bestAdd.r])}@${bestAdd.S.season}" style="text-decoration:none">${hdr('Best waiver pickup', 'up')}
+    <div class="line2"><span style="font-weight:600">${player(bestAdd.pid)} <span class="note">${esc(M.playerPos(bestAdd.pid))}</span></span><span class="num up">${f1(bestAdd.pts)} pts</span></div>
+    <span class="note">${name(bestAdd.S.ownerOf[bestAdd.r])} · ${bestAdd.S.season} · added Week ${bestAdd.week}${bestAdd.bid ? ' for $' + bestAdd.bid : ''} · ${bestAdd.starts} start${bestAdd.starts === 1 ? '' : 's'}</span></a>`);
+  if (heist && heist.side.net > 0) {
+    const others = heist.trade.sides.filter(s => s.owner !== heist.side.owner).map(s => name(s.owner)).join(' & ');
+    cards.push(`<button type="button" class="box tradebtn"${tradeAttr(heist.trade)}>${hdr('Best trade win · tap for details', 'up')}
+      <div class="line2"><span style="font-weight:600">${name(heist.side.owner)} over ${others}</span><span class="num up">${signed(heist.side.net)}</span></div>
+      <span class="note">${heist.trade.season} · Week ${heist.trade.week} · got ${heist.side.got.map(g => player(g.pid)).join(', ') || 'picks'} · starter pts gained, ${LG.format === 'dynasty' ? 'including later seasons' : 'rest of season'}</span></button>`);
+  }
+  if (steal) cards.push(`<button type="button" class="box tradebtn" data-draft-team="${steal.S.season}:${steal.p.roster_id}">${hdr('Best steal of the draft · tap for the draft', 'up')}
+    <div class="line2"><span style="font-weight:600">${player(steal.p.player_id)} <span class="note">${esc(steal.p.pos)}</span></span><span class="num up">R${steal.p.round} → ${esc(steal.p.pos)}${steal.S.posRank[steal.p.player_id]}</span></div>
+    <span class="note">${name(steal.S.ownerOf[steal.p.roster_id])} · ${steal.S.season} · pick ${steal.p.pick_no} · ${f1(steal.p.pts)} pts</span></button>`);
+  if (bust) cards.push(`<button type="button" class="box tradebtn" data-draft-team="${bust.S.season}:${bust.p.roster_id}">${hdr('Worst bust of the draft · tap for the draft', 'down')}
+    <div class="line2"><span style="font-weight:600">${player(bust.p.player_id)} <span class="note">${esc(bust.p.pos)}</span></span><span class="num down">R${bust.p.round} → ${esc(bust.p.pos)}${bust.S.posRank[bust.p.player_id] || '—'}</span></div>
+    <span class="note">${name(bust.S.ownerOf[bust.p.roster_id])} · ${bust.S.season} · pick ${bust.p.pick_no} · ${f1(bust.p.pts)} pts</span></button>`);
+  if (blunder) { const key = gameKey(blunder.S, blunder.b.week, blunder.b.rid);
+    cards.push(`<button type="button" class="box tradebtn"${key ? ` data-matchup="${key}"` : ''}>${hdr('Worst bench blunder · tap for the lineups', 'down')}
+    <div class="line2"><span style="font-weight:600">${name(blunder.S.ownerOf[blunder.b.rid])}</span><span class="num down">${f1(blunder.b.gap)} pts</span></div>
+    <span class="note">${blunder.S.season} · Week ${blunder.b.week} · left on the bench${blunder.b.wouldHaveWon ? ' · would have won' : blunder.b.lostBy != null ? ' · lost by ' + f1(blunder.b.lostBy) : ''}</span></button>`); }
+  if (cards.length) out.push(ddSection('All-time bests &amp; worsts', 'Finished seasons', `<div style="display:flex;flex-direction:column;gap:10px">${cards.join('')}</div>`));
 
   // Schedule swap
   const swaps = lb.map(c => ({ c, s: M.swapCareer[c.id] })).filter(x => x.s && (x.s.actualW + x.s.actualL) > 0)
