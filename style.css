@@ -413,3 +413,11 @@ button.tile.tbtn:hover, button.tile.tbtn:focus-visible { background: var(--panel
 /* All-time career dropdowns: the summary is the card itself, no disclosure marker. */
 .career-dd > summary::-webkit-details-marker { display: none; }
 .career-dd[open] > summary .note:first-child { color: var(--muted); }
+
+/* Profile: waivers, trades and draft panels side by side (stacked on narrow screens). */
+.move-trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; align-items: start; }
+.move-trio.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.move-panel { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.move-career { display: flex; flex-direction: column; gap: 2px; padding-bottom: 8px; border-bottom: 1px solid var(--line, #22363B); }
+.move-panel .row .sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 4px; }
+@media (max-width: 760px) { .move-trio, .move-trio.two { grid-template-columns: 1fr; } }

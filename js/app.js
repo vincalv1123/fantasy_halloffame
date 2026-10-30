@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610302200';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610302200';
-import { buildModel, optimalPoints } from './model.js?v=202610302200';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610302200';
+import { CONFIG } from './config.js?v=202610302240';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610302240';
+import { buildModel, optimalPoints } from './model.js?v=202610302240';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610302240';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -946,8 +946,50 @@ function viewManager(id, seasonSel) {
     <a class="card${sel && sel.S.season === s.season ? ' sel' : ''}" href="${mlink(id)}@${s.season}"><span class="num note">${s.season}</span><span class="num" style="font-size:24px">${Math.round(s.score)}</span>
     <span class="note" style="${s.champion ? 'color:' + GOLD : ''}">${s.champion ? 'Champion' : s.runnerUp ? 'Runner-up' : s.last ? 'Last place' : s.current ? 'In progress · ' + ordinal(s.rank) : ordinal(s.rank) + ' · ' + wl(s.wins, s.losses, s.ties)}</span></a>`).join('')}</div>
     <a class="btn" href="${PX}vs-${encodeURIComponent(id)}~${encodeURIComponent((lb.find(x => x.id !== id) || {}).id || id)}">Compare with another manager →</a>`));
+  out.push(managerMoves(id));
   return out.join('');
 }
+// Profile, bottom: waivers, trades and the draft side by side, career totals on top and each season below.
+function managerMoves(id) {
+  const list = managerSeasons(id).slice().sort((a, b) => Number(b.S.season) - Number(a.S.season));
+  if (!list.length) return '';
+  const dyn = LG.format === 'dynasty';
+  const so = x => (x.S.isCurrent ? ' <span class="note">so far</span>' : '');
+  const panel = (title, top, rows, foot) => `<div class="box move-panel"><span class="note" style="text-transform:uppercase;letter-spacing:.05em;font-size:11px">${title}</span>
+    <div class="move-career">${top}</div><div class="rows">${rows}</div>${foot ? `<span class="note">${foot}</span>` : ''}</div>`;
+  const big = (v, cls, sub) => `<span class="note" style="font-size:12px">Career</span><span class="num ${cls}" style="font-size:24px">${v}</span><span class="note">${sub}</span>`;
+  const row = (x, v, cls, sub) => `<a class="row" href="${mlink(id)}@${x.S.season}" style="grid-template-columns:44px minmax(0,1fr) auto;text-decoration:none">
+    <span class="year">${x.S.season}</span><span class="sub" style="min-width:0">${sub}${so(x)}</span><span class="num ${cls}" style="font-size:14px">${v}</span></a>`;
+  // Waivers.
+  const wPts = list.reduce((t, x) => t + x.waiv.pts, 0); const wAdds = list.reduce((t, x) => t + x.waiv.adds, 0);
+  const wBest = list.map(x => x.waiv.best && { x, b: x.waiv.best }).filter(Boolean).sort((a, b) => b.b.pts - a.b.pts)[0];
+  const waivers = panel('Waivers', big(signed(wPts), sign(wPts), `${wAdds} pickup${wAdds === 1 ? '' : 's'}${wBest && wBest.b.pts > 0 ? ' · best: ' + player(wBest.b.pid) + ' (' + wBest.x.S.season + ', ' + signed(wBest.b.pts) + ')' : ''}`),
+    list.map(x => row(x, signed(x.waiv.pts), sign(x.waiv.pts), `${x.waiv.adds} add${x.waiv.adds === 1 ? '' : 's'}${x.waiv.best && x.waiv.best.pts > 0 ? ' · ' + player(x.waiv.best.pid) : ''}`)).join(''),
+    'Points above a replacement-level starter, for every start.');
+  // Trades.
+  const sides = x => x.S.trades.map(t => t.sides.find(sd => sd.rid === x.r)).filter(Boolean);
+  const tNet = list.reduce((t, x) => t + x.trades.net, 0); const tCount = list.reduce((t, x) => t + x.trades.count, 0);
+  const allSides = [].concat.apply([], list.map(sides));
+  const gc = {}; allSides.forEach(sd => { if (sd.grade) gc[sd.grade] = (gc[sd.grade] || 0) + 1; });
+  const gradeLine = ['A', 'B', 'C', 'D', 'F'].filter(g => gc[g]).map(g => `<span class="grade sm" style="background:${GRADE_COLORS[g]}">${g}</span>${gc[g] > 1 ? '<span class="note">×' + gc[g] + '</span>' : ''}`).join(' ');
+  const trades = panel('Trades', big(signed(tNet), sign(tNet), `${tCount} trade${tCount === 1 ? '' : 's'}${gradeLine ? '<span style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;align-items:center">' + gradeLine + '</span>' : ''}`),
+    list.map(x => { const ss = sides(x); return row(x, signed(x.trades.net), sign(x.trades.net), ss.length ? `${ss.length} trade${ss.length === 1 ? '' : 's'} · <span class="num" style="letter-spacing:1px;font-weight:600">${ss.map(sd => sd.grade ? `<span style="color:${GRADE_COLORS[sd.grade]}">${sd.grade}</span>` : '').join('')}</span>` : 'No trades'); }).join(''),
+    dyn ? 'Starter points gained minus given up, including later seasons.' : 'Value got minus value given, rest of the season.');
+  // Draft (redraft only).
+  let draft = '';
+  if (!dyn) {
+    const dl = list.filter(x => x.picks > 0);
+    const dVal = dl.reduce((t, x) => t + (x.draftVal || 0), 0); const dPicks = dl.reduce((t, x) => t + x.picks, 0);
+    const bestOf = x => x.S.picks.filter(p => p.roster_id === x.r).sort((a, b) => b.value - a.value)[0];
+    const dBest = dl.map(x => ({ x, p: bestOf(x) })).filter(y => y.p).sort((a, b) => b.p.value - a.p.value)[0];
+    draft = panel('Draft', dl.length ? big(signed(dVal, 0), sign(dVal), `${dPicks} picks in ${dl.length} draft${dl.length === 1 ? '' : 's'}${dBest ? ' · best: ' + player(dBest.p.player_id) + ' (' + dBest.x.S.season + ', ' + signed(dBest.p.value, 0) + ')' : ''}`) : '<span class="note">No drafts yet</span>',
+      dl.map(x => { const b = bestOf(x); return `<button type="button" class="row rowbtn" data-draft-team="${x.S.season}:${x.r}" style="grid-template-columns:44px minmax(0,1fr) auto;text-align:left;width:100%">
+        <span class="year">${x.S.season}</span><span class="sub" style="min-width:0">${x.picks} picks${b ? ' · ' + player(b.player_id) : ''}${so(x)}</span><span class="num ${sign(x.draftVal)}" style="font-size:14px">${signed(x.draftVal, 0)}</span></button>`; }).join(''),
+      'Positional value vs. draft slot. Tap a season for that draft.');
+  }
+  return section(`<h2>Waivers, trades &amp; the draft</h2><div class="move-trio${dyn ? ' two' : ''}">${waivers}${trades}${draft}</div>`);
+}
+
 const ordinal = n => n + (['th', 'st', 'nd', 'rd'][(n % 100 - 20) % 10] || ['th', 'st', 'nd', 'rd'][n % 100] || 'th');
 
 // ---------- Compare ----------
