@@ -1,7 +1,7 @@
 // Turns raw Sleeper data into every stat, award and score the site shows.
 // Pure functions only: nothing here touches the page or the network.
 
-import { CONFIG } from './config.js?v=202610300438';
+import { CONFIG } from './config.js?v=202610300444';
 
 const ELIGIBLE = {
   QB: ['QB'], RB: ['RB'], WR: ['WR'], TE: ['TE'], K: ['K'], DEF: ['DEF'],
@@ -316,6 +316,29 @@ function buildSeason(raw, players, isNewest, later, format, opts) {
   S.replacement = replacement;
   const aboveRepl = pid => { const p = posOf(pid); return replacement[p] ? (playerPts[pid] || 0) - replacement[p].pts : 0; };
   S.aboveRepl = aboveRepl;
+
+  // Waiver value: every start a pickup made counts only the points above a replacement-level starter
+  // at his position (the same QB13 / RB30 / WR34… line the draft grades use), per game.
+  const replWeeks = Math.max(1, scoredWeeks.length > 6 ? scoredWeeks.length - 1 : scoredWeeks.length);
+  // Kickers and defenses often have no one past the starting line on a roster; use a low rostered one instead.
+  const replBase = p => {
+    if (replacement[p] && replacement[p].pts > 0) return replacement[p].pts;
+    const xs = Object.keys(playerPts).filter(id => posOf(id) === p).map(id => playerPts[id]).sort((a, b) => a - b);
+    return xs.length ? xs[Math.floor((xs.length - 1) * 0.25)] : 0;
+  };
+  const replPpg = p => replBase(p) / replWeeks;
+  S.replPpg = replPpg;
+  rids.forEach(r => {
+    const W = waivers[r];
+    W.rawPts = W.pts; W.pts = 0; W.best = null;
+    (W.list || []).forEach(x => {
+      x.raw = x.pts; x.pos = posOf(x.pid);
+      x.pts = x.raw - x.starts * replPpg(x.pos);
+      W.pts += x.pts;
+      if (!W.best || x.pts > W.best.pts) W.best = { pid: x.pid, pts: x.pts, raw: x.raw, starts: x.starts, week: x.week };
+    });
+    W.perDollar = S.usesFaab && W.faab > 0 ? W.pts / W.faab : null;
+  });
 
   // Draft: each pick's positional value against what picks around that slot produced this season.
   const picks = raw.picks.filter(p => p.player_id).map(p => ({ ...p, pts: playerPts[p.player_id] || 0, pos: posOf(p.player_id), vor: aboveRepl(p.player_id) }));

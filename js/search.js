@@ -2,7 +2,7 @@
 // season, week and player it is about, and answers from the league data.
 // Rule-based, so it understands the question shapes listed in EXAMPLES and HELP.
 
-import { parseRank, rankAnswer } from './rank.js?v=202610300438';
+import { parseRank, rankAnswer } from './rank.js?v=202610300444';
 
 export const EXAMPLES = [
   'Best season ever by manager score',
@@ -201,9 +201,9 @@ export function answer(M, P) {
     const w = S.waivers[ridOf(S, id)];
     const adds = (w.list || []).slice().sort((a, b) => b.pts - a.pts);
     if (!adds.length) return card(`${name(id)} made no pickups in ${S.season}.`);
-    return card(`${link(id)} made ${adds.length} pickups in ${S.season} for ${f2(w.pts)} starter pts${S.usesFaab ? ' and $' + w.faab + ' FAAB' : ''}.`,
-      `<div class="scroll"><table class="table"><thead><tr><th>Player</th><th>Week</th>${S.usesFaab ? '<th>Bid</th>' : ''}<th>Starts</th><th>Starter pts</th></tr></thead><tbody>
-      ${adds.slice(0, 25).map(a => `<tr><td class="t" style="font-weight:400">${esc(M.playerName(a.pid))} <span class="note">${esc(S.posOf(a.pid))}</span></td><td>${a.week}</td>${S.usesFaab ? `<td>${a.bid ? '$' + a.bid : 'FA'}</td>` : ''}<td>${a.starts}</td><td>${f2(a.pts)}</td></tr>`).join('')}</tbody></table></div>` +
+    return card(`${link(id)} made ${adds.length} pickups in ${S.season} for ${f2(w.pts)} pts above replacement${S.usesFaab ? ' and $' + w.faab + ' FAAB' : ''}.`,
+      `<div class="scroll"><table class="table"><thead><tr><th>Player</th><th>Week</th>${S.usesFaab ? '<th>Bid</th>' : ''}<th>Starts</th><th>Pts</th><th>Over repl.</th></tr></thead><tbody>
+      ${adds.slice(0, 25).map(a => `<tr><td class="t" style="font-weight:400">${esc(M.playerName(a.pid))} <span class="note">${esc(S.posOf(a.pid))}</span></td><td>${a.week}</td>${S.usesFaab ? `<td>${a.bid ? '$' + a.bid : 'FA'}</td>` : ''}<td>${a.starts}</td><td>${f2(a.raw != null ? a.raw : a.pts)}</td><td>${f2(a.pts)}</td></tr>`).join('')}</tbody></table></div>` +
       (adds.length > 25 ? note('Showing the 25 best of ' + adds.length + '.') : '') + (P.season ? '' : note('Showing ' + S.season + '. Add a year for another season.')));
   }
 

@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610300438';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610300438';
-import { buildModel, optimalPoints } from './model.js?v=202610300438';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610300438';
+import { CONFIG } from './config.js?v=202610300444';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610300444';
+import { buildModel, optimalPoints } from './model.js?v=202610300444';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610300444';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -249,8 +249,8 @@ function viewAll() {
   const hdr = (t, cls) => `<span class="note${cls ? ' ' + cls : ''}" style="text-transform:uppercase;letter-spacing:.05em;font-size:11px">${t}</span>`;
   const cards = [];
   if (bestAdd) cards.push(`<a class="box" href="${mlink(bestAdd.S.ownerOf[bestAdd.r])}@${bestAdd.S.season}" style="text-decoration:none">${hdr('Best waiver pickup', 'up')}
-    <div class="line2"><span style="font-weight:600">${player(bestAdd.pid)} <span class="note">${esc(M.playerPos(bestAdd.pid))}</span></span><span class="num up">${f1(bestAdd.pts)} pts</span></div>
-    <span class="note">${name(bestAdd.S.ownerOf[bestAdd.r])} · ${bestAdd.S.season} · added Week ${bestAdd.week}${bestAdd.bid ? ' for $' + bestAdd.bid : ''} · ${bestAdd.starts} start${bestAdd.starts === 1 ? '' : 's'}</span></a>`);
+    <div class="line2"><span style="font-weight:600">${player(bestAdd.pid)} <span class="note">${esc(M.playerPos(bestAdd.pid))}</span></span><span class="num up">${signed(bestAdd.pts)} over repl.</span></div>
+    <span class="note">${name(bestAdd.S.ownerOf[bestAdd.r])} · ${bestAdd.S.season} · added Week ${bestAdd.week}${bestAdd.bid ? ' for $' + bestAdd.bid : ''} · ${f1(bestAdd.raw)} pts in ${bestAdd.starts} start${bestAdd.starts === 1 ? '' : 's'}</span></a>`);
   if (heist && heist.side.net > 0) {
     const others = heist.trade.sides.filter(s => s.owner !== heist.side.owner).map(s => name(s.owner)).join(' & ');
     cards.push(`<button type="button" class="box tradebtn"${tradeAttr(heist.trade)}>${hdr('Best trade win · tap for details', 'up')}
@@ -267,7 +267,8 @@ function viewAll() {
     cards.push(`<button type="button" class="box tradebtn"${key ? ` data-matchup="${key}"` : ''}>${hdr('Worst bench blunder · tap for the lineups', 'down')}
     <div class="line2"><span style="font-weight:600">${name(blunder.S.ownerOf[blunder.b.rid])}</span><span class="num down">${f1(blunder.b.gap)} pts</span></div>
     <span class="note">${blunder.S.season} · Week ${blunder.b.week} · left on the bench${blunder.b.wouldHaveWon ? ' · would have won' : blunder.b.lostBy != null ? ' · lost by ' + f1(blunder.b.lostBy) : ''}</span></button>`); }
-  if (cards.length) out.push(ddSection('All-time bests &amp; worsts', 'Finished seasons', `<div style="display:flex;flex-direction:column;gap:10px">${cards.join('')}</div>`));
+  if (cards.length) out.push(section(`<div class="head"><h2>All-time bests &amp; worsts</h2><span class="note">Finished seasons</span></div><div style="display:flex;flex-direction:column;gap:10px">${cards.join('')}</div>
+    <span class="note">Waiver pickups count points above a replacement-level starter at their position for every start.</span>`));
 
   // Schedule swap
   const swaps = lb.map(c => ({ c, s: M.swapCareer[c.id] })).filter(x => x.s && (x.s.actualW + x.s.actualL) > 0)
@@ -439,7 +440,7 @@ function seasonAwards(S) {
   const wk = S.rids.slice().sort((a, b) => S.waivers[b].pts - S.waivers[a].pts)[0];
   if (wk != null) {
     const w = S.waivers[wk];
-    aw.push({ key: 'waiver', k: 'Waiver Wire King', rid: wk, v: f1(w.pts) + ' pts', d: 'Starter points from pickups' + (w.perDollar != null ? ' · ' + f1(w.perDollar) + ' pts per FAAB dollar' : '') + (w.best ? ' · best add: ' + player(w.best.pid) : ''), cls: 'gold-t', good: true });
+    aw.push({ key: 'waiver', k: 'Waiver Wire King', rid: wk, v: signed(w.pts), d: 'Pts above replacement from pickups' + (w.perDollar != null ? ' · ' + f1(w.perDollar) + ' per FAAB dollar' : '') + (w.best ? ' · best add: ' + player(w.best.pid) : ''), cls: 'gold-t', good: true });
   }
   let toy = null;
   S.trades.forEach(t => t.sides.forEach(x => { if (!toy || x.net > toy.s.net) toy = { t, s: x }; }));
@@ -627,7 +628,7 @@ function tiles(list) {
   return `<div class="tiles">${list.map(t => `<div class="tile"><span class="k">${t[0]}</span><span class="v" style="font-size:20px">${t[1]}</span>${t[2] ? `<span class="d">${t[2]}</span>` : ''}</div>`).join('')}</div>`;
 }
 
-const fmtRaw = (k, v) => k === 'results' ? pct3(v) : k === 'startSit' ? (v * 100).toFixed(1) + '%' : k === 'waivers' ? f1(v) + ' pts' : signed(v) + ' pts';
+const fmtRaw = (k, v) => k === 'results' ? pct3(v) : k === 'startSit' ? (v * 100).toFixed(1) + '%' : k === 'waivers' ? signed(v) + ' pts' : signed(v) + ' pts';
 
 function seasonCalc(x) {
   const S = x.S; const sc = x.score; const W = CONFIG.weights;
@@ -644,7 +645,7 @@ function seasonCalc(x) {
     <div class="scroll"><table class="table"><thead><tr><th>Part</th><th>Raw stat</th><th>League avg</th><th>Spread</th><th>Scaled</th><th>Weight</th><th>Adds</th></tr></thead>
     <tbody>${rows}<tr><td class="t" style="font-weight:600">Total</td><td></td><td></td><td></td><td></td><td></td><td style="font-weight:600;color:#F1F4F3">${f1(sc.total)}</td></tr></tbody></table></div>
     <ol class="steps">
-      <li><b>Raw stats.</b> Results = ½ × win % (${pct3(x.st.winPct)}) + ½ × all-play (${pct3(x.st.allPlayPct)}) = ${pct3(sc.raw.results)}. Start/sit = points started ÷ best possible lineup (${comma(x.eff.actual)} ÷ ${comma(x.eff.optimal)}). Waivers = starter points from pickups. Trades = starter points gained minus given up.${S.hasDraft ? ' Draft = each pick’s points above a replacement-level starter at his position, minus what picks near the same slot were worth.' : ''}</li>
+      <li><b>Raw stats.</b> Results = ½ × win % (${pct3(x.st.winPct)}) + ½ × all-play (${pct3(x.st.allPlayPct)}) = ${pct3(sc.raw.results)}. Start/sit = points started ÷ best possible lineup (${comma(x.eff.actual)} ÷ ${comma(x.eff.optimal)}). Waivers = points above a replacement-level starter at each pickup's position, for every start. Trades = starter points gained minus given up.${S.hasDraft ? ' Draft = each pick’s points above a replacement-level starter at his position, minus what picks near the same slot were worth.' : ''}</li>
       <li><b>Scaled.</b> 50 + 20 × (raw − league avg) ÷ spread, kept between 0 and 100. Spread is the standard deviation across all ${S.rids.length} teams that season.</li>
       <li><b>Bonus.</b> ${sc.bonusParts.length ? 'Results got ' + sc.bonusParts.join(', ') + ' (capped at 100).' : 'No playoff, final or title bonus this season.'}${S.isCurrent ? ' Bonuses are added once the season ends.' : ''}</li>
       <li><b>Score.</b> Each scaled part × its weight, divided by the total weight (${Math.round(S.weightSum * 100)}%) = <b>${f1(sc.total)}</b>.</li>
@@ -672,7 +673,7 @@ function seasonPartRows(S, r) {
   const detail = {
     results: wl(st.wins, st.losses, st.ties) + ' · ' + pct3(st.allPlayPct) + ' all-play' + (sc.bonusParts.length ? ' · ' + sc.bonusParts.join(', ') : ''),
     startSit: (eff.pct * 100).toFixed(1) + '% of best lineup · ' + Math.round(eff.benchLeft) + ' pts left on bench',
-    waivers: f1(S.waivers[r].pts) + ' starter pts from ' + S.waivers[r].adds + ' pickup' + (S.waivers[r].adds === 1 ? '' : 's'),
+    waivers: signed(S.waivers[r].pts) + ' pts above replacement from ' + S.waivers[r].adds + ' pickup' + (S.waivers[r].adds === 1 ? '' : 's'),
     trades: signed(S.tradeNet[r].net) + ' pts across ' + S.tradeNet[r].count + ' trade' + (S.tradeNet[r].count === 1 ? '' : 's'),
     draft: 'Pick value vs. draft slot'
   };
@@ -685,7 +686,7 @@ function careerPartRows(c) {
   const detail = {
     results: wl(c.wins, c.losses, c.ties) + ' · ' + pct3(c.allPlayPct) + ' all-play · ' + c.titles + ' title' + (c.titles === 1 ? '' : 's'),
     startSit: (c.effPct * 100).toFixed(1) + '% of best lineup · ' + Math.round(c.benchLeft) + ' pts left on bench',
-    waivers: f1(c.waiverPts) + ' starter pts from pickups',
+    waivers: signed(c.waiverPts) + ' pts above replacement from pickups',
     trades: signed(c.tradeNet) + ' pts across ' + c.trades + ' trade' + (c.trades === 1 ? '' : 's'),
     draft: 'Average draft part across seasons with a draft'
   };
@@ -771,7 +772,7 @@ function viewManager(id, seasonSel) {
       ['Best week', x.best ? f2(x.best.pts) : '—', x.best ? 'Week ' + x.best.w + (x.best.playoff ? ' · playoffs' : '') : ''],
       ['Worst week', x.worst ? f2(x.worst.pts) : '—', x.worst ? 'Week ' + x.worst.w : ''],
       ['Start/sit', (x.eff.pct * 100).toFixed(1) + '%', Math.round(x.eff.benchLeft) + ' pts left on the bench'],
-      ['Waivers', x.waiv.adds + ' adds', f1(x.waiv.pts) + ' starter pts' + (S.usesFaab ? ' · $' + x.waiv.faab + ' FAAB' : '')],
+      ['Waivers', x.waiv.adds + ' adds', signed(x.waiv.pts) + ' over repl.' + (S.usesFaab ? ' · $' + x.waiv.faab + ' FAAB' : '')],
       ['Trades', String(x.trades.count), 'Net ' + signed(x.trades.net) + ' starter pts'],
       ['Team MVP', x.mvp ? esc(M.playerName(x.mvp.pid)) : '—', x.mvp ? f1(x.mvp.pts) + ' starter pts' : '']
     ])));
@@ -780,7 +781,7 @@ function viewManager(id, seasonSel) {
     const parts = [
       ['Results', W.results, sc.parts.results, `Win % ${pct3(st.winPct)} · all-play ${pct3(st.allPlayPct)}${sc.bonusParts.length ? ' · bonus: ' + sc.bonusParts.join(', ') : ''}`],
       ['Start/sit', W.startSit, sc.parts.startSit, `Started ${(x.eff.pct * 100).toFixed(1)}% of best possible points · ${Math.round(x.eff.benchLeft)} pts left on the bench`],
-      ['Waivers', W.waivers, sc.parts.waivers, `${f1(x.waiv.pts)} starter pts from ${x.waiv.adds} pickups${x.waiv.best && x.waiv.best.pts > 0 ? ' · best: ' + player(x.waiv.best.pid) + ' (' + f1(x.waiv.best.pts) + ')' : ''}`],
+      ['Waivers', W.waivers, sc.parts.waivers, `${signed(x.waiv.pts)} pts above replacement from ${x.waiv.adds} pickups${x.waiv.best && x.waiv.best.pts > 0 ? ' · best: ' + player(x.waiv.best.pid) + ' (' + signed(x.waiv.best.pts) + ')' : ''}`],
       ['Trades', W.trades, sc.parts.trades, `${x.trades.count} trade${x.trades.count === 1 ? '' : 's'} · net ${signed(x.trades.net)} starter pts`],
       ['Draft', W.draft, sc.parts.draft, `${x.picks} picks · ${signed(x.draftVal, 0)} positional pts vs. what picks near those slots were worth`]
     ].filter(p => p[2] != null);
@@ -804,14 +805,14 @@ function viewManager(id, seasonSel) {
       ['Best week', best ? f2(best.pts) : '—', best ? best.season + ' · Week ' + best.w : ''],
       ['Worst week', worst ? f2(worst.pts) : '—', worst ? worst.season + ' · Week ' + worst.w : ''],
       ['Start/sit', (c.effPct * 100).toFixed(1) + '%', Math.round(c.benchLeft) + ' pts left on the bench'],
-      ['Waivers', adds + ' adds', comma(c.waiverPts) + ' starter pts' + (faabSeasons ? ' · $' + faab + ' FAAB' : '')],
+      ['Waivers', adds + ' adds', signed(c.waiverPts) + ' over repl.' + (faabSeasons ? ' · $' + faab + ' FAAB' : '')],
       ['Trades', String(c.trades), 'Net ' + signed(c.tradeNet) + ' starter pts'],
       ['Draft', picks + ' picks', signed(draft, 0) + ' positional pts vs. their slots']
     ])));
     const parts = [
       ['Results', W.results, c.parts.results, `Win % ${pct3(c.winPct)} · all-play ${pct3(apG ? apSum / apG : 0)}${c.titles ? ' · title bonus ×' + c.titles : ''}`],
       ['Start/sit', W.startSit, c.parts.startSit, `Started ${(c.effPct * 100).toFixed(1)}% of best possible points · ${Math.round(c.benchLeft)} pts left on the bench`],
-      ['Waivers', W.waivers, c.parts.waivers, `${comma(c.waiverPts)} starter pts from ${adds} pickups`],
+      ['Waivers', W.waivers, c.parts.waivers, `${signed(c.waiverPts)} pts above replacement from ${adds} pickups`],
       ['Trades', W.trades, c.parts.trades, `${c.trades} trade${c.trades === 1 ? '' : 's'} · net ${signed(c.tradeNet)} starter pts`],
       ['Draft', W.draft, c.parts.draft, `${picks} picks · ${signed(draft, 0)} positional pts vs. what their draft slots usually produce`]
     ].filter(p => p[2] != null);

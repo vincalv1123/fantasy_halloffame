@@ -98,7 +98,7 @@ export function rankAnswer(M, P, R) {
       points: ['points for', (S, r) => S.st[r].pf, f1], ppg: ['points per game', (S, r) => S.st[r].games ? S.st[r].pf / S.st[r].games : 0, f2],
       pa: ['points against', (S, r) => S.st[r].pa, f1], allPlay: ['all-play win %', (S, r) => S.st[r].allPlayPct, p3], luck: ['luck', (S, r) => S.st[r].luck, sgn],
       startSit: ['start/sit %', (S, r) => S.efficiency[r].pct, pct], bench: ['bench points left', (S, r) => S.efficiency[r].benchLeft, f1],
-      waivers: ['waiver starter points', (S, r) => S.waivers[r].pts, f1], trades: ['trade net', (S, r) => S.tradeNet[r].net, sgn], value: ['draft value', (S, r) => S.draftValue[r], sgn]
+      waivers: ['waiver pts above replacement', (S, r) => S.waivers[r].pts, f1], trades: ['trade net', (S, r) => S.tradeNet[r].net, sgn], value: ['draft value', (S, r) => S.draftValue[r], sgn]
     }[metric] || null;
     if (!M2) return null;
     entityLabel = 'season'; metricLabel = M2[0]; fmt = M2[2]; lowerIsBetter = metric === 'pa' || metric === 'bench';
@@ -109,7 +109,7 @@ export function rankAnswer(M, P, R) {
     const M2 = {
       score: ['career Manager Score', c => c.score, f1], titles: ['titles', c => c.titles, String], wins: ['wins', c => c.wins, String], winPct: ['win %', c => c.winPct, p3],
       points: ['points for', c => c.pf, f1], ppg: ['points per game', c => c.ppg, f2], luck: ['luck', c => c.luck, sgn], clutch: ['clutch rating', c => (c.clutch == null ? null : c.clutch * 100), x => sgn(x) + '%'],
-      startSit: ['start/sit %', c => c.effPct, pct], bench: ['bench points left', c => c.benchLeft, f1], trades: ['trade net', c => c.tradeNet, sgn], waivers: ['waiver starter points', c => c.waiverPts, f1]
+      startSit: ['start/sit %', c => c.effPct, pct], bench: ['bench points left', c => c.benchLeft, f1], trades: ['trade net', c => c.tradeNet, sgn], waivers: ['waiver pts above replacement', c => c.waiverPts, f1]
     }[metric] || null;
     if (!M2) return null;
     entityLabel = 'manager'; metricLabel = M2[0]; fmt = M2[2]; lowerIsBetter = metric === 'bench';
@@ -139,10 +139,10 @@ export function rankAnswer(M, P, R) {
         const others = t.sides.filter(x => x !== s).map(x => link(x.owner)).join(' & ');
         rows.push({ v: s.net, label: link(s.owner) + ' with ' + others, sub: t.season + ' · Week ' + t.week + ' · got ' + (s.got.map(g => esc(M.playerName(g.pid))).join(', ') || 'picks') + ' for ' + (s.sent.map(g => esc(M.playerName(g.pid))).join(', ') || 'picks') }); }); });
   } else if (R.entity === 'pickup') {
-    entityLabel = (R.pos ? R.pos + ' ' : '') + 'pickup'; metricLabel = 'starter points after the pickup'; fmt = f1;
+    entityLabel = (R.pos ? R.pos + ' ' : '') + 'pickup'; metricLabel = 'points above replacement after the pickup'; fmt = f1;
     seasons.forEach(S => S.rids.forEach(r => { if (!ok(S, r)) return; (S.waivers[r].list || []).forEach(a => {
       if (R.pos && S.posOf(a.pid) !== R.pos) return;
-      rows.push({ v: a.pts, label: esc(M.playerName(a.pid)) + ' <span class="note">' + esc(S.posOf(a.pid)) + '</span>', sub: link(S.ownerOf[r]) + ' · ' + S.season + ' Week ' + a.week + ' · ' + a.starts + ' starts' + (a.bid ? ' · $' + a.bid : '') }); }); }));
+      rows.push({ v: a.pts, label: esc(M.playerName(a.pid)) + ' <span class="note">' + esc(S.posOf(a.pid)) + '</span>', sub: link(S.ownerOf[r]) + ' · ' + S.season + ' Week ' + a.week + ' · ' + f1(a.raw != null ? a.raw : a.pts) + ' pts in ' + a.starts + ' starts' + (a.bid ? ' · $' + a.bid : '') }); }); }));
   } else if (R.entity === 'playerSeason') {
     metric = metric === 'ppg' ? 'ppg' : 'points';
     entityLabel = (R.pos ? R.pos + ' ' : 'player ') + 'season'; metricLabel = metric === 'ppg' ? 'starter points per start' : 'starter points for one team';
