@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610300620';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610300620';
-import { buildModel, optimalPoints } from './model.js?v=202610300620';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610300620';
+import { CONFIG } from './config.js?v=202610300627';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610300627';
+import { buildModel, optimalPoints } from './model.js?v=202610300627';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610300627';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -1211,6 +1211,8 @@ const KIND_LABEL = { rookie: 'Rookie draft', startup: 'Startup draft', supplemen
 const dynKey = C => C.season + '-' + C.kind;
 const MULTI = 3; // a multi-hit = starter-level finishes in this many seasons or more
 const isMulti = p => p.hitYears.length >= MULTI;
+// "Traded" tag: who he went to and when; tapping it opens the trade.
+const tradedTag = p => (p.traded ? ` <button type="button" class="tag-trade"${tradeAttr(p.traded.trade)} title="Traded ${p.traded.season} Week ${p.traded.week}${p.traded.toOwner ? ' to ' + esc(M.nameOf(p.traded.toOwner)) : ''}">Traded${p.traded.toOwner ? ' → ' + name(p.traded.toOwner) : ''}</button>` : '');
 const hitMark = p => (!p.hit ? '' : `<span class="up" title="Starter-level in ${p.hitYears.join(', ')}">✓${p.hitYears.length > 1 ? '<span class="note" style="color:inherit"> ×' + p.hitYears.length + '</span>' : ''}</span>`) + (p.elite ? ` <span class="gold-t" title="Elite (top-tier finish) in ${p.eliteYears.join(', ')}">★${p.eliteYears.length > 1 ? '×' + p.eliteYears.length : ''}</span>` : '');
 const confidence = C => (C.years <= 1 ? 'Early · year 1' : C.years === 2 ? 'Settling · year 2' : 'Final · year ' + C.years);
 const pickLabel = (C, p) => p.round + '.' + String(p.slot).padStart(2, '0');
@@ -1263,7 +1265,7 @@ function viewDynDrafts(sel) {
   out.push(section(`<h2>Round by round</h2>${rounds.map(rd => { const ps = C.picks.filter(p => p.round === rd).sort((x, y) => x.pick_no - y.pick_no);
     return `<details class="calc round"${rd === 1 ? ' open' : ''}><summary>Round ${rd}</summary><div class="calc-body" style="padding-top:4px"><div class="scroll"><table class="table"><thead><tr><th>Pick</th><th style="text-align:left">Player</th><th style="text-align:left">Team</th>${yearHeads(C)}<th>Total</th>${C.graded ? '<th>vs. slot</th><th>Grade</th>' : ''}<th>Hit</th></tr></thead><tbody>
       ${ps.map(p => { const g = C.graded ? gradeOf(p.z) : null;
-        return `<tr><td class="rk" style="width:auto">${pickLabel(C, p)}</td><td class="t">${player(p.player_id)} <span class="note">${esc(p.pos || '')}</span></td><td class="t" style="font-weight:400"><a href="${mlink(p.owner)}" style="text-decoration:none">${name(p.owner)}</a></td>
+        return `<tr><td class="rk" style="width:auto">${pickLabel(C, p)}</td><td class="t">${player(p.player_id)} <span class="note">${esc(p.pos || '')}</span>${tradedTag(p)}</td><td class="t" style="font-weight:400"><a href="${mlink(p.owner)}" style="text-decoration:none">${name(p.owner)}</a></td>
           ${yearCells(C, p)}<td>${f1(p.total)}</td>${C.graded ? `<td class="${sign(p.value)}">${signed(p.value, 0)}</td><td><span class="grade sm" style="background:${GRADE_COLORS[g]}">${g}</span></td>` : ''}<td>${hitMark(p)}</td></tr>`; }).join('')}</tbody></table></div></div></details>`; }).join('')}
     <span class="note">Y1, Y2… = points above replacement in each season since ${C.season}${C.S.isCurrent || Number(C.season) + C.years - 1 === Number(M.seasons[0].season) && M.seasons[0].isCurrent ? ' (the latest season is still in progress)' : ''}.</span>`));
 
@@ -1307,13 +1309,14 @@ function openDynTeam(key) {
       <button type="button" class="close" data-close aria-label="Close">✕</button></div>
     <div class="line2" style="align-items:center;justify-content:flex-start;gap:12px"><span class="grade" style="background:${GRADE_COLORS[g]}">${g}</span>
       <span class="stack"><span style="font-size:14px">${ordinal(rank)} of ${C.teams_.length} · <span class="num ${sign(t.value)}">${signed(t.value, 0)}</span> vs. slot · ${t.hits} of ${t.picks.length} hit</span>
-      <span class="sub">${confidence(C)}</span></span></div>
-    <div class="scroll"><table class="table"><thead><tr><th>Pick</th><th style="text-align:left">Player</th>${yearHeads(C)}<th>Total</th><th>Best finish</th><th>For ${name(t.owner)}</th><th>vs. slot</th><th>Grade</th><th>Hit</th></tr></thead><tbody>
+      <span class="sub">${confidence(C)} · kept value ${f1(t.picks.reduce((s2, p) => s2 + p.keptValue, 0))} pts (${ordinal(C.teams_.slice().sort((x, y) => y.picks.reduce((s2, p) => s2 + p.keptValue, 0) - x.picks.reduce((s2, p) => s2 + p.keptValue, 0)).indexOf(t) + 1)} of ${C.teams_.length})</span></span></div>
+    <div class="scroll"><table class="table"><thead><tr><th>Pick</th><th style="text-align:left">Player</th>${yearHeads(C)}<th>Total</th><th>Best finish</th><th>For ${name(t.owner)}</th><th>Kept value</th><th>vs. slot</th><th>Grade</th><th>Hit</th></tr></thead><tbody>
     ${t.picks.slice().sort((x, y) => x.pick_no - y.pick_no).map(p => { const pg = gradeOf(p.z);
-      return `<tr><td class="rk" style="width:auto">${pickLabel(C, p)}</td><td class="t">${player(p.player_id)} <span class="note">${esc(p.pos || '')}</span></td>${yearCells(C, p)}
+      return `<tr><td class="rk" style="width:auto">${pickLabel(C, p)}</td><td class="t">${player(p.player_id)} <span class="note">${esc(p.pos || '')}</span>${tradedTag(p)}</td>${yearCells(C, p)}
         <td>${f1(p.total)}</td><td style="color:#C9D3D2">${p.bestFinish ? esc(p.pos || '') + p.bestFinish : '—'}</td><td style="color:#C9D3D2">${f1(p.mgrPts)}</td>
+        <td title="${p.traded ? f1(p.mgrPts) + ' kept + ' + f1(p.traded.returnPts) + ' from the trade' : 'Never traded away'}">${f1(p.keptValue)}${p.traded ? '<span class="note"> incl. trade</span>' : ''}</td>
         <td class="${sign(p.value)}">${signed(p.value, 0)}</td><td><span class="grade sm" style="background:${GRADE_COLORS[pg]}">${pg}</span></td><td>${hitMark(p)}</td></tr>`; }).join('')}</tbody></table></div>
-    <p class="note" style="margin:0">Y1, Y2… = points above replacement each season since the draft. For ${name(t.owner)} = starter points he scored for this team. Best finish = his best positional rank in any season.</p>
+    <p class="note" style="margin:0">Y1, Y2… = points above replacement each season since the draft. For ${name(t.owner)} = starter points he scored for this team. Kept value = those points plus, if he was traded away, this team's share of the starter points it got back in that trade (split evenly if several players went out). The grade judges the pick itself; kept value shows what the team actually got out of it. Best finish = his best positional rank in any season.</p>
     <a class="btn" href="${mlink(t.owner)}" data-close>Open ${name(t.owner)}'s profile →</a>
   </div>`;
   if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
@@ -1353,6 +1356,8 @@ function openDynInfo() {
     <p>A <b>hit</b> is a season where the player finished inside the starting line at his position (a starter-level season). The current season counts once 6 weeks are played. A <b>multi-hit</b> is ${MULTI} or more starter-level seasons: a player who stuck, not a one-year wonder. <b>Elite</b> ★ = at least one top-tier season (top 6 at his position in a 12-team league, top 4 at TE or 1-QB).</p>
     <h3>5. How sure is the grade?</h3>
     <p><b>Early</b> (year 1), <b>Settling</b> (year 2), <b>Final</b> (year 3 on). Grades keep moving as players develop, so a slow-starting rookie can climb from a D to an A.</p>
+    <h3>Traded players</h3>
+    <p>A pick's grade follows the <b>player</b>, wherever he ends up: if you trade a rookie and he breaks out elsewhere, your pick still grades well, because you picked the right player. Selling him early shows up in that <b>trade's</b> grade instead, so it isn't counted twice. A <b>Traded</b> tag marks those players (tap it for the trade), and <b>Kept value</b> in a team's pop-up shows what the drafter actually got: his starter points for them plus their share of what came back in the trade.</p>
     <h3>Other numbers</h3>
     <p><b>For [manager]</b> in a team's pop-up = starter points that player scored for the team that drafted him. <b>Best finish</b> = his best positional rank in any season. <b>Career rookie drafting</b> adds up every rookie draft (not startup or supplemental drafts).</p>
   </div>`;
@@ -1376,7 +1381,7 @@ function managerRookieDrafts(id) {
       const yv = ys.reduce((t, m) => t + m.p.value, 0); const yh = ys.filter(m => m.p.hit).length;
       return `<details class="calc"><summary><span>${yr} rookie draft <span class="note" style="font-weight:400">· ${ys.length} pick${ys.length === 1 ? '' : 's'} · ${yh} hit</span></span><span class="num ${sign(yv)}" style="font-size:13px;margin-left:auto;margin-right:12px">${signed(yv, 0)}</span></summary>
         <div class="calc-body" style="padding-top:4px"><div class="rows">${ys.map(({ x, p }) => `<button type="button" class="row rowbtn" data-dyn-team="${dynKey(x)}:${p.roster_id}" style="grid-template-columns:52px minmax(0,1fr) auto;padding:11px 0">
-      <span class="year">${x.season}</span><span class="stack"><span style="font-size:14px;font-weight:500">${player(p.player_id)} <span class="note">${esc(p.pos || '')}</span>${p.hit ? ' ' + hitMark(p) : ''}</span><span class="sub">Pick ${pickLabel(x, p)} · ${f1(p.total)} pts above replacement since</span></span>
+      <span class="year">${x.season}</span><span class="stack"><span style="font-size:14px;font-weight:500">${player(p.player_id)} <span class="note">${esc(p.pos || '')}</span>${p.hit ? ' ' + hitMark(p) : ''}${p.traded ? ' <span class="tag-trade static">Traded</span>' : ''}</span><span class="sub">Pick ${pickLabel(x, p)} · ${f1(p.total)} pts above replacement since</span></span>
       <span class="num ${sign(p.value)}" style="font-size:14px">${signed(p.value, 0)}</span></button>`).join('')}</div></div></details>`; }).join('')}
     </div></details>
     <span class="note">✓ = starter-level finish in a season (×3 = three of them; 3+ is a multi-hit). ★ = an elite, top-tier season. Value compares each pick with what that slot usually produces after the same number of seasons.</span>`;

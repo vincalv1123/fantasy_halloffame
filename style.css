@@ -403,3 +403,8 @@ button.tile.tbtn:hover, button.tile.tbtn:focus-visible { background: var(--panel
 .info-btn:hover { color: var(--fg); border-color: var(--fg-2); }
 .info-card h3 { margin: 4px 0 0; font-size: 14px; }
 .info-card p { margin: 0; font-size: 13px; line-height: 1.55; color: var(--fg-2); }
+
+/* Traded tag on drafted players */
+.tag-trade { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line-strong); background: none; color: var(--fg-2); font: inherit; font-size: 10px; letter-spacing: .04em; text-transform: uppercase; cursor: pointer; vertical-align: 1px; white-space: nowrap; }
+.tag-trade:hover { color: var(--fg); border-color: var(--fg-2); }
+.tag-trade.static { cursor: default; }

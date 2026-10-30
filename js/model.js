@@ -1,7 +1,7 @@
 // Turns raw Sleeper data into every stat, award and score the site shows.
 // Pure functions only: nothing here touches the page or the network.
 
-import { CONFIG } from './config.js?v=202610300620';
+import { CONFIG } from './config.js?v=202610300627';
 
 const ELIGIBLE = {
   QB: ['QB'], RB: ['RB'], WR: ['WR'], TE: ['TE'], K: ['K'], DEF: ['DEF'],
@@ -655,6 +655,21 @@ export function dynastyDrafts(seasons) {
       return { ...p, owner, slot: ((p.pick_no - 1) % n) + 1, pos: p.pos || S.posOf(p.player_id), byYear, total: careerValue(byYear), eliteYears, elite: eliteYears.length > 0,
         hit: hitYears.length > 0, hitYears, mgrPts: years.reduce((t, Sy) => t + starterPtsFor(Sy, owner, p.player_id), 0),
         bestFinish: years.map(Sy => Sy.posRank[p.player_id]).filter(Boolean).sort((a, b) => a - b)[0] || null };
+    });
+    // Was the player later traded away by the manager who drafted him? Kept value = his starter points for the
+    // drafter, plus that manager's share of what came back in the trade (the trade's own starter-point count).
+    picks.forEach(p => {
+      for (const Sy of years) {
+        const t = (Sy.trades || []).slice().sort((a, b) => a.created - b.created).find(tr => tr.sides.some(sd => Sy.ownerOf[sd.rid] === p.owner && sd.sent.some(g => g.pid === p.player_id)));
+        if (!t) continue;
+        const mine = t.sides.find(sd => Sy.ownerOf[sd.rid] === p.owner);
+        const to = t.sides.find(sd => sd.got.some(g => g.pid === p.player_id));
+        const share = mine.sent.length ? 1 / mine.sent.length : 1;
+        p.traded = { season: Sy.season, week: t.week, trade: t, toOwner: to ? Sy.ownerOf[to.rid] : null,
+          returnPts: mine.got.reduce((s2, g) => s2 + g.pts, 0) * share, gotNames: mine.got.map(g => g.pid), picksBack: (mine.picks || []).length };
+        break;
+      }
+      p.keptValue = p.mgrPts + (p.traded ? p.traded.returnPts : 0);
     });
     classes.push({ season: S.season, S, kind: dr.kind, draftId: dr.draftId, rounds: dr.rounds, teams: n, years: years.length, graded: dr.kind !== 'supplemental', picks });
   }));
