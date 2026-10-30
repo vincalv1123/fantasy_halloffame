@@ -1,7 +1,7 @@
 // Turns raw Sleeper data into every stat, award and score the site shows.
 // Pure functions only: nothing here touches the page or the network.
 
-import { CONFIG } from './config.js?v=202610291840';
+import { CONFIG } from './config.js?v=202610300414';
 
 const ELIGIBLE = {
   QB: ['QB'], RB: ['RB'], WR: ['WR'], TE: ['TE'], K: ['K'], DEF: ['DEF'],
@@ -377,7 +377,7 @@ function buildSeason(raw, players, isNewest, later, format, opts) {
   // Weekly highs and lows.
   const allScores = [];
   scoredWeeks.forEach(w => rids.forEach(r => { if (byWeek[w][r]) allScores.push({ rid: r, week: w, pts: byWeek[w][r].points }); }));
-  S.weeklyHighs = allScores.slice().sort((a, b) => b.pts - a.pts).slice(0, 5);
+  S.weeklyHighs = allScores.slice().sort((a, b) => b.pts - a.pts).slice(0, 10);
 
   // Manager Score for the season.
   const results = {}; const startSit = {}; const waiv = {}; const trade = {}; const draft = {};

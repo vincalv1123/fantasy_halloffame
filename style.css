@@ -388,3 +388,12 @@ button.tile.tbtn:hover, button.tile.tbtn:focus-visible { background: var(--panel
 .calc.trades-dd > summary::after { margin-left: 4px; }
 .calc.trades-dd[open] > summary { border-bottom: 0; }
 .calc.trades-dd > .calc-body { padding: 14px 0 0; }
+
+/* Luck tables and weekly highs */
+.row.luck-row { grid-template-columns: minmax(0,1fr) 64px 72px 56px; padding: 11px 0; text-decoration: none; }
+.row.luck-row .num { font-size: 14px; text-align: right; }
+.row.luck-row.head-row { font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); padding: 6px 0; }
+.row.luck-row.head-row span:not(:first-child) { text-align: right; }
+.row.high-row { grid-template-columns: 22px 52px minmax(0,1fr) auto; padding: 12px 0; }
+.row.high-row.rowbtn:hover { background: var(--panel); }
+.calc.trades-dd { margin-top: 0; }

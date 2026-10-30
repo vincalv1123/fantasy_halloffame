@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610291840';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610291840';
-import { buildModel, optimalPoints } from './model.js?v=202610291840';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610291840';
+import { CONFIG } from './config.js?v=202610300414';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610300414';
+import { buildModel, optimalPoints } from './model.js?v=202610300414';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610300414';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -210,7 +210,12 @@ function viewAll() {
     out.push(section(`<div class="head"><h2>Luck Index</h2><span class="note">Actual wins minus expected wins</span></div>
       <div class="cards"><a class="card" href="${mlink(L.id)}"><span class="k">Luckiest</span><span class="v up">${signed(L.luck)}</span><span class="name">${name(L.id)}</span></a>
       <a class="card" href="${mlink(U.id)}"><span class="k">Unluckiest</span><span class="v down">${signed(U.luck)}</span><span class="name">${name(U.id)}</span></a></div>
-      <p class="lead">Expected wins come from all-play: each week, how many teams your score would have beaten.</p>`));
+      <p class="lead">Expected wins come from all-play: each week, how many teams your score would have beaten.</p>
+      <details class="calc"><summary>Career luck · every manager</summary><div class="calc-body" style="padding-top:4px"><div class="rows">
+        <div class="row luck-row head-row"><span>Manager</span><span>Wins</span><span>Expected</span><span>Luck</span></div>
+        ${byLuck.map(c => `<a class="row luck-row" href="${mlink(c.id)}"><span class="name" style="font-size:14px">${name(c.id)}</span>
+          <span class="num">${f1(c.wins + c.ties / 2)}</span><span class="num" style="color:#8A9C9F">${f1(c.allPlay)}</span>${luckCell(c.luck)}</a>`).join('')}</div>
+        <span class="note">Regular season, all years. Luck = wins minus expected wins.</span></div></details>`));
   }
 
   const riv = M.rivalry; const heist = M.heist;
@@ -276,6 +281,10 @@ function viewAll() {
   }
   return out.join('');
 }
+
+// A section whose heading opens and closes it (no box), like the season page's Trades.
+const ddSection = (title, note, body) => section(`<details class="calc trades-dd"><summary><h2>${title}</h2><span class="note">${note}</span></summary><div class="calc-body">${body}</div></details>`);
+const luckCell = x => `<span class="num ${sign(x)}" style="font-size:14px;text-align:right">${signed(x)}</span>`;
 
 // ---------- Season ----------
 const HL = ['#E8B04B', '#C9D3D2', '#F0907A', '#6FB7E0', '#B59CE6'];
@@ -481,7 +490,19 @@ function viewSeason(S) {
   out.push(section(`<h2>Season awards</h2><div class="tiles">${aw.map(a => `<div class="tile"><span class="k ${a.cls}">${a.k}</span>
     <span style="font-size:15px;font-weight:600">${a.who}</span><span class="num" style="font-size:15px">${a.v}</span><span class="d">${a.d}</span></div>`).join('')}</div>`));
 
-  if (S.picks.length && LG.format !== 'dynasty') out.push(section(teamGradesSection(S, draftTeamGrades(S), S.season + ' draft grades') + `<a class="btn" href="${PX}drafts@${S.season}">Full ${S.season} draft →</a>`));
+  if (S.picks.length && LG.format !== 'dynasty') {
+    const grades = teamGradesSection(S, draftTeamGrades(S), '').replace(/^\s*<div class="head">[\s\S]*?<\/div>/, '');
+    out.push(ddSection(S.season + ' draft grades', 'Positional value vs. draft slot', grades + `<a class="btn" href="${PX}drafts@${S.season}">Full ${S.season} draft →</a>`));
+  }
+
+  if (S.regWeeks.length) {
+    const byLuck = S.standings.slice().sort((a, b) => b.luck - a.luck);
+    out.push(ddSection('Luck index', S.isCurrent ? 'So far this season' : 'Wins vs. expected wins', `<div class="rows">
+      <div class="row luck-row head-row"><span>Team</span><span>W–L</span><span>Expected</span><span>Luck</span></div>
+      ${byLuck.map(s => `<a class="row luck-row" href="${ml(s.rid)}@${S.season}"><span class="name" style="font-size:14px">${nm(s.rid)}</span>
+        <span class="num">${wl(s.wins, s.losses, s.ties)}</span><span class="num" style="color:#8A9C9F">${f1(s.expectedWins)}</span>${luckCell(s.luck)}</a>`).join('')}</div>
+      <span class="note">Expected wins come from all-play: each week, the share of teams your score would have beaten. Positive = luckier than your scores deserved.</span>`));
+  }
 
   if (S.trades.length) {
     out.push(section(`<details class="calc trades-dd"><summary><h2>Trades</h2><span class="note">${S.trades.length} trade${S.trades.length > 1 ? 's' : ''}</span></summary><div class="calc-body">
@@ -492,13 +513,14 @@ function viewSeason(S) {
         <span class="num ${sign(s.net)}" style="font-size:14px;white-space:nowrap">${signed(s.net)}</span></div>`).join('')}</button>`).join('')}</div></div></details>`));
   }
 
-  out.push(section(`<div class="head"><h2>Team MVPs</h2><span class="note">Most starter points for that team</span></div><div class="rows">
+  out.push(ddSection('Team MVPs', 'Most starter points for each team', `<div class="rows">
     ${S.standings.map(s => { const m = S.mvp[s.rid]; return m ? `<div class="row" style="grid-template-columns:minmax(0,1fr) auto;padding:11px 0">
       <span class="stack"><span style="font-size:14px;font-weight:500">${player(m.pid)}${m.pos ? ' · ' + esc(m.pos) : ''}</span><span class="sub">${nm(s.rid)}</span></span>
       <span class="num" style="font-size:14px">${f1(m.pts)}</span></div>` : ''; }).join('')}</div>`));
 
-  out.push(section(`<h2>Weekly highs</h2><div class="rows">${S.weeklyHighs.map(h => `<div class="row" style="grid-template-columns:52px minmax(0,1fr) auto;padding:12px 0">
-    <span class="num" style="font-size:12px;color:#8A9C9F">WK ${h.week}</span><a href="${ml(h.rid)}" style="text-decoration:none;font-size:14px">${nm(h.rid)}</a><span class="num" style="font-size:15px">${f2(h.pts)}</span></div>`).join('')}</div>`));
+  out.push(ddSection('Weekly highs', 'Top ' + S.weeklyHighs.length + ' scores · tap one for the game', `<div class="rows">${S.weeklyHighs.map((h, i) => { const key = gameKey(S, h.week, h.rid);
+    const inner = `<span class="num" style="font-size:12px;color:#8A9C9F">${i + 1}</span><span class="num" style="font-size:12px;color:#8A9C9F">WK ${h.week}</span><span style="font-size:14px;text-align:left">${nm(h.rid)}</span><span class="num" style="font-size:15px">${f2(h.pts)}</span>`;
+    return key ? `<button type="button" class="row rowbtn high-row" data-matchup="${key}">${inner}</button>` : `<div class="row high-row">${inner}</div>`; }).join('')}</div>`));
 
   return { html: out.join(''), liveWeek, defaultHL };
 }
