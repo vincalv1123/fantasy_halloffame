@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610300627';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610300627';
-import { buildModel, optimalPoints } from './model.js?v=202610300627';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610300627';
+import { CONFIG } from './config.js?v=202610300644';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610300644';
+import { buildModel, optimalPoints } from './model.js?v=202610300644';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610300644';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -193,6 +193,14 @@ function viewAll() {
         <span class="bar"><i style="width:${c.score}%;background:${color}"></i></span></span>
         <span class="val">${Math.round(c.score)}</span></summary>${scoreParts(careerPartRows(c), mlink(c.id), 'Career')}</details>`;
     }).join('')}</div><span class="note">Tap a row for the score's parts. Tap a name for the manager's profile.</span>`));
+  if (LG.format === 'dynasty' && M.scout && Object.keys(M.scout).length) {
+    const sc = Object.values(M.scout).sort((x, y) => y.score - x.score);
+    out.push(section(`<div class="head"><h2>Scout grade</h2><span class="note">Rookie drafting · 0–100 · 50 is average</span></div>
+      <div class="rows">${sc.map((x, i) => `<a class="row r-score" href="${mlink(x.id)}"><span class="num" style="font-size:13px;color:${i === 0 ? GOLD : '#8A9C9F'}">${i + 1}</span>
+        <span class="stack" style="gap:7px"><span class="name">${name(x.id)}</span><span class="bar"><i style="width:${x.score}%;background:${i === 0 ? GOLD : '#7E9093'}"></i></span></span>
+        <span class="val">${Math.round(x.score)}</span></a>`).join('')}</div>
+      <span class="note">From every rookie draft: value per pick vs. slot (60%), hit rate (25%) and elite rate (15%), with young picks counting less. Separate from the Manager Score, which leaves the draft out in dynasty. <a href="${PX}drafts">Rookie drafts →</a></span>`));
+  }
 
   if (M.records.length) {
     out.push(section(`<h2>Single-game records</h2><div class="tiles">${M.records.map(r => `
@@ -424,7 +432,7 @@ function liveGames(S, week, list) {
 }
 
 // Every award a season hands out. The season tab shows the tile set; the Awards page shows all of them.
-const SEASON_TILE_AWARDS = ['waiver', 'trade', 'steal', 'bust', 'blunder', 'sacko'];
+const SEASON_TILE_AWARDS = ['waiver', 'trade', 'steal', 'scout', 'bust', 'blunder', 'sacko'];
 function seasonAwards(S) {
   const aw = [];
   const done = !S.isCurrent;
@@ -445,7 +453,21 @@ function seasonAwards(S) {
   let toy = null;
   S.trades.forEach(t => t.sides.forEach(x => { if (!toy || x.net > toy.s.net) toy = { t, s: x }; }));
   if (toy && toy.s.net > 0) aw.push({ key: 'trade', k: 'Trade of the Year', rid: toy.s.rid, v: signed(toy.s.net), d: 'Week ' + toy.t.week + ' · got ' + (toy.s.got.map(g => player(g.pid)).join(', ') || 'picks'), cls: 'gold-t', good: true });
-  if (S.steal) aw.push({ key: 'steal', k: 'Steal of the Draft', rid: S.steal.roster_id, v: 'R' + S.steal.round + ' → ' + esc(S.steal.pos) + S.posRank[S.steal.player_id], d: player(S.steal.player_id) + ', round ' + S.steal.round + ', finished ' + esc(S.steal.pos) + S.posRank[S.steal.player_id] + (S.isCurrent ? ' so far' : ''), cls: 'gold-t', good: true });
+  // Dynasty: Scout of the Year replaces Steal of the Draft. It adds up what each manager's rookie-draft picks
+  // produced that season (players in their first 3 seasons), so a finished season's winner never changes.
+  if (LG.format === 'dynasty' && M && M.dynDrafts && M.dynDrafts.length) {
+    const Y = Number(S.season); const tot = {};
+    M.dynDrafts.filter(C => C.kind === 'rookie').forEach(C => {
+      const off = Y - Number(C.season); if (off < 0 || off > 2) return;
+      C.picks.forEach(p => { const v = p.byYear[off] || 0; const t = tot[p.owner] = tot[p.owner] || { v: 0, n: 0, best: null }; t.v += v; t.n++; if (!t.best || v > t.best.v) t.best = { p, v }; });
+    });
+    const win = Object.entries(tot).filter(([o]) => S.rids.some(r => S.ownerOf[r] === o)).sort((x, y) => y[1].v - x[1].v)[0];
+    if (win && win[1].v > 0) {
+      const rid = S.rids.find(r => S.ownerOf[r] === win[0]); const t = win[1];
+      aw.push({ key: 'scout', k: 'Scout of the Year', rid, v: '+' + Math.round(t.v), d: 'Pts above replacement from ' + t.n + ' young rookie pick' + (t.n === 1 ? '' : 's') + (t.best && t.best.v > 0 ? ' · best: ' + player(t.best.p.player_id) : ''), cls: 'gold-t', good: true });
+    }
+  }
+  if (S.steal && LG.format !== 'dynasty') aw.push({ key: 'steal', k: 'Steal of the Draft', rid: S.steal.roster_id, v: 'R' + S.steal.round + ' → ' + esc(S.steal.pos) + S.posRank[S.steal.player_id], d: player(S.steal.player_id) + ', round ' + S.steal.round + ', finished ' + esc(S.steal.pos) + S.posRank[S.steal.player_id] + (S.isCurrent ? ' so far' : ''), cls: 'gold-t', good: true });
   if (S.bust) aw.push({ key: 'bust', k: 'Bust of the Draft', rid: S.bust.roster_id, v: 'R' + S.bust.round + ' → ' + esc(S.bust.pos) + (S.posRank[S.bust.player_id] || '—'), d: player(S.bust.player_id) + ', round ' + S.bust.round + (S.posRank[S.bust.player_id] ? ', finished ' + esc(S.bust.pos) + S.posRank[S.bust.player_id] : ', barely played') + (S.isCurrent ? ' so far' : ''), cls: 'bad-t', good: false });
   const hi = S.weeklyHighs[0];
   if (hi) aw.push({ key: 'highScore', k: 'Highest score', rid: hi.rid, v: f2(hi.pts), d: 'Week ' + hi.week, cls: 'gold-t', good: true });
@@ -1275,7 +1297,7 @@ function viewDynDrafts(sel) {
     const agg = {};
     rookie.forEach(x => x.picks.forEach(p => { const a2 = agg[p.owner] = agg[p.owner] || { id: p.owner, picks: 0, hits: 0, multi: 0, elite: 0, value: 0, best: null };
       a2.picks++; if (p.hit) a2.hits++; if (isMulti(p)) a2.multi++; if (p.elite) a2.elite++; a2.value += p.value; if (!a2.best || p.value > a2.best.p.value) a2.best = { p, x }; }));
-    const rows = Object.values(agg).map(x => ({ name: name(x.id), href: mlink(x.id), x, v: { picks: x.picks, hits: x.hits, multi: x.multi, elite: x.elite, rate: x.picks ? x.hits / x.picks : 0, value: x.value, tie: x.value } }));
+    const rows = Object.values(agg).map(x => ({ name: name(x.id), href: mlink(x.id), x, v: { scout: M.scout && M.scout[x.id] ? M.scout[x.id].score : null, picks: x.picks, hits: x.hits, multi: x.multi, elite: x.elite, rate: x.picks ? x.hits / x.picks : 0, value: x.value, tie: x.value } }));
     const cols = [
       { key: 'name', label: 'Manager', left: true, cell: r => `<td class="t"><a href="${r.href}" style="text-decoration:none">${r.name}</a></td>` },
       { key: 'picks', label: 'Picks', sortable: true, cell: r => cellNum(String(r.v.picks), '#C9D3D2') },
@@ -1284,6 +1306,7 @@ function viewDynDrafts(sel) {
       { key: 'multi', label: 'Multi', sortable: true, cell: r => cellNum(String(r.v.multi)) },
       { key: 'elite', label: 'Elite', sortable: true, cell: r => cellNum(String(r.v.elite), '#E8B04B') },
       { key: 'value', label: 'Value', sortable: true, cell: r => `<td class="${sign(r.v.value)}">${signed(r.v.value, 0)}</td>` },
+      { key: 'scout', label: 'Scout', sortable: true, cell: r => cellNum(r.v.scout != null ? String(Math.round(r.v.scout)) : '—', '#E8B04B') },
       { key: 'best', label: 'Best pick', left: true, cell: r => `<td class="t" style="font-weight:400;white-space:nowrap">${r.x.best ? player(r.x.best.p.player_id) + ' <span class="note">' + r.x.best.x.season + ' ' + pickLabel(r.x.best.x, r.x.best.p) + '</span>' : '—'}</td>` }
     ];
     out.push(section(`<div class="head"><h2>Career rookie drafting</h2><span class="note">All ${rookie.length} rookie draft${rookie.length === 1 ? '' : 's'} · tap a column to sort</span></div>${sortTable(cols, rows, { key: 'value' })}
@@ -1356,6 +1379,9 @@ function openDynInfo() {
     <p>A <b>hit</b> is a season where the player finished inside the starting line at his position (a starter-level season). The current season counts once 6 weeks are played. A <b>multi-hit</b> is ${MULTI} or more starter-level seasons: a player who stuck, not a one-year wonder. <b>Elite</b> ★ = at least one top-tier season (top 6 at his position in a 12-team league, top 4 at TE or 1-QB).</p>
     <h3>5. How sure is the grade?</h3>
     <p><b>Early</b> (year 1), <b>Settling</b> (year 2), <b>Final</b> (year 3 on). Grades keep moving as players develop, so a slow-starting rookie can climb from a D to an A.</p>
+    <h3>Scout grade and Scout of the Year</h3>
+    <p>The <b>Scout grade</b> (0–100) rates each manager's rookie drafting: value per pick vs. slot 60%, hit rate 25%, elite rate 15%, each scaled so 50 is the league average. Picks count 40% in year 1, 70% in year 2 and fully after that, and managers with few picks are pulled toward 50. It keeps updating as classes develop. It's separate from the Manager Score, which leaves the draft out in dynasty.</p>
+    <p><b>Scout of the Year</b> (replaces Steal of the Draft in dynasty) goes to the manager whose rookie picks in their first three seasons produced the most that season: points above replacement, elite seasons multiplied. It only uses that season's results, so once a season ends its winner never changes.</p>
     <h3>Traded players</h3>
     <p>A pick's grade follows the <b>player</b>, wherever he ends up: if you trade a rookie and he breaks out elsewhere, your pick still grades well, because you picked the right player. Selling him early shows up in that <b>trade's</b> grade instead, so it isn't counted twice. A <b>Traded</b> tag marks those players (tap it for the trade), and <b>Kept value</b> in a team's pop-up shows what the drafter actually got: his starter points for them plus their share of what came back in the trade.</p>
     <h3>Other numbers</h3>
@@ -1366,6 +1392,19 @@ function openDynInfo() {
 }
 document.addEventListener('click', e => { if (e.target.closest('[data-dyn-info]')) { e.preventDefault(); openDynInfo(); } });
 
+function scoutCalc(id) {
+  const x = M.scout && M.scout[id]; if (!x) return '';
+  const row = (label, w, mine, avg, scaled, fmt) => `<tr><td class="t" style="font-weight:500">${label}</td><td>${fmt(mine)}</td><td style="color:#8A9C9F">${fmt(avg)}</td><td>${f1(scaled)}</td><td style="color:#8A9C9F">${w}%</td><td>${f1(scaled * w / 100)}</td></tr>`;
+  const pc = v => Math.round(v * 100) + '%';
+  return `<details class="calc"><summary>Show the Scout grade calculation</summary><div class="calc-body">
+    <div class="scroll"><table class="table"><thead><tr><th>Part</th><th>${name(id)}</th><th>League avg</th><th>Scaled</th><th>Weight</th><th>Adds</th></tr></thead><tbody>
+    ${row('Value per pick', 60, x.valPer, x.avg_valPer, x.s_valPer, v => signed(v, 0))}${row('Hit rate', 25, x.hitRate, x.avg_hitRate, x.s_hitRate, pc)}${row('Elite rate', 15, x.eliteRate, x.avg_eliteRate, x.s_eliteRate, pc)}
+    <tr><td class="t" style="font-weight:600">Before sample-size pull</td><td></td><td></td><td></td><td></td><td style="font-weight:600">${f1(x.raw)}</td></tr></tbody></table></div>
+    <ol class="steps"><li><b>Parts.</b> Value per pick = average vs. slot across his rookie picks; hit rate = share of picks with a starter-level season; elite rate = share with an elite season. Each is scaled so the league average is 50 and one standard deviation is 20 (0–100).</li>
+    <li><b>Young picks count less.</b> A pick counts 40% in its first season, 70% in its second and fully from year 3, so his ${x.picks} picks weigh ${f1(x.W)}.</li>
+    <li><b>Sample size.</b> With few picks the grade is pulled toward 50: 50 + (${f1(x.raw)} − 50) × ${f1(x.W)} ÷ (${f1(x.W)} + 4) = <b>${f1(x.score)}</b>.</li></ol></div></details>`;
+}
+
 function managerRookieDrafts(id) {
   const rookie = (M.dynDrafts || []).filter(x => x.kind === 'rookie' && x.teams_);
   const mine = [].concat.apply([], rookie.map(x => x.picks.filter(p => p.owner === id).map(p => ({ x, p }))));
@@ -1374,7 +1413,7 @@ function managerRookieDrafts(id) {
   const value = mine.reduce((t, m) => t + m.p.value, 0);
   const best = mine.slice().sort((a2, b2) => b2.p.value - a2.p.value)[0];
   return `<div class="head"><h2>Rookie drafts</h2><span class="note">${rookie.length} rookie draft${rookie.length === 1 ? '' : 's'}</span></div>
-    <div class="cards"><div class="card"><span class="k">Hit rate</span><span class="v">${Math.round(hits / mine.length * 100)}%</span><span class="note">${hits} of ${mine.length} picks · ${mine.filter(m => isMulti(m.p)).length} multi-hit · ${mine.filter(m => m.p.elite).length} elite</span></div>
+    <div class="cards">${(M.scout && M.scout[id]) ? `<div class="card"><span class="k gold-t">Scout grade</span><span class="v">${Math.round(M.scout[id].score)}</span><span class="note">${ordinal(Object.values(M.scout).sort((x, y) => y.score - x.score).findIndex(x => x.id === id) + 1)} of ${Object.keys(M.scout).length} · 0–100, 50 is average</span></div>` : ''}<div class="card"><span class="k">Hit rate</span><span class="v">${Math.round(hits / mine.length * 100)}%</span><span class="note">${hits} of ${mine.length} picks · ${mine.filter(m => isMulti(m.p)).length} multi-hit · ${mine.filter(m => m.p.elite).length} elite</span></div>
       <div class="card"><span class="k">Value vs. slot</span><span class="v ${sign(value)}">${signed(value, 0)}</span><span class="note">Best: ${player(best.p.player_id)} (${best.x.season} ${pickLabel(best.x, best.p)})</span></div></div>
     <details class="calc"><summary>Drafts <span class="note" style="font-weight:400;margin-left:8px;margin-right:auto">${[...new Set(mine.map(m => m.x.season))].length} rookie draft${[...new Set(mine.map(m => m.x.season))].length === 1 ? '' : 's'} · ${mine.length} picks</span></summary><div class="calc-body" style="gap:8px">
     ${[...new Set(mine.map(m => m.x.season))].sort((y1, y2) => Number(y2) - Number(y1)).map(yr => { const ys = mine.filter(m => m.x.season === yr).sort((a2, b2) => a2.p.pick_no - b2.p.pick_no);
@@ -1384,6 +1423,7 @@ function managerRookieDrafts(id) {
       <span class="year">${x.season}</span><span class="stack"><span style="font-size:14px;font-weight:500">${player(p.player_id)} <span class="note">${esc(p.pos || '')}</span>${p.hit ? ' ' + hitMark(p) : ''}${p.traded ? ' <span class="tag-trade static">Traded</span>' : ''}</span><span class="sub">Pick ${pickLabel(x, p)} · ${f1(p.total)} pts above replacement since</span></span>
       <span class="num ${sign(p.value)}" style="font-size:14px">${signed(p.value, 0)}</span></button>`).join('')}</div></div></details>`; }).join('')}
     </div></details>
+    ${scoutCalc(id)}
     <span class="note">✓ = starter-level finish in a season (×3 = three of them; 3+ is a multi-hit). ★ = an elite, top-tier season. Value compares each pick with what that slot usually produces after the same number of seasons.</span>`;
 }
 
@@ -1526,7 +1566,7 @@ document.addEventListener('click', e => {
 });
 
 // ---------- Awards history ----------
-const AWARD_ORDER = ['champion', 'runnerUp', 'regSeason', 'bestMgr', 'waiver', 'trade', 'steal', 'highScore', 'luckiest', 'worstMgr', 'bust', 'unluckiest', 'blunder', 'sacko'];
+const AWARD_ORDER = ['champion', 'runnerUp', 'regSeason', 'bestMgr', 'waiver', 'trade', 'steal', 'scout', 'highScore', 'luckiest', 'worstMgr', 'bust', 'unluckiest', 'blunder', 'sacko'];
 function viewAwards() {
   const bySeason = M.seasons.map(S => ({ S, list: seasonAwards(S) }));
   const out = [];

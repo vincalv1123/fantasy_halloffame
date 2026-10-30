@@ -1,7 +1,7 @@
 // Turns raw Sleeper data into every stat, award and score the site shows.
 // Pure functions only: nothing here touches the page or the network.
 
-import { CONFIG } from './config.js?v=202610300627';
+import { CONFIG } from './config.js?v=202610300644';
 
 const ELIGIBLE = {
   QB: ['QB'], RB: ['RB'], WR: ['WR'], TE: ['TE'], K: ['K'], DEF: ['DEF'],
@@ -719,6 +719,34 @@ export function dynastyDrafts(seasons) {
   return classes;
 }
 
+// ---------- Scout grade (dynasty): 0–100 for rookie drafting ----------
+// Value per pick (vs. slot) 60%, hit rate 25%, elite rate 15%, each scaled so the league average is 50 and one
+// standard deviation is 20. Young picks count less (40% in year 1, 70% in year 2, full from year 3), and with few
+// picks the grade is pulled toward 50: final = 50 + (raw − 50) × weight ÷ (weight + 4).
+export function scoutGrades(classes) {
+  const rookie = (classes || []).filter(C => C.kind === 'rookie' && C.teams_);
+  const mat = C => (C.years <= 1 ? 0.4 : C.years === 2 ? 0.7 : 1);
+  const by = {};
+  rookie.forEach(C => C.picks.forEach(p => {
+    const w = mat(C);
+    const x = by[p.owner] = by[p.owner] || { id: p.owner, W: 0, val: 0, hit: 0, elite: 0, picks: 0 };
+    x.W += w; x.val += w * p.value; x.hit += w * (p.hit ? 1 : 0); x.elite += w * (p.elite ? 1 : 0); x.picks++;
+  }));
+  const list = Object.values(by).filter(x => x.W > 0);
+  list.forEach(x => { x.valPer = x.val / x.W; x.hitRate = x.hit / x.W; x.eliteRate = x.elite / x.W; });
+  ['valPer', 'hitRate', 'eliteRate'].forEach(k => {
+    const xs = list.map(x => x[k]); const mu = mean(xs); const s = sd(xs);
+    list.forEach(x => { x['s_' + k] = Math.max(0, Math.min(100, 50 + 20 * (s > 0 ? (x[k] - mu) / s : 0))); x['avg_' + k] = mu; });
+  });
+  list.forEach(x => {
+    x.raw = 0.6 * x.s_valPer + 0.25 * x.s_hitRate + 0.15 * x.s_eliteRate;
+    x.shrink = x.W / (x.W + 4);
+    x.score = 50 + (x.raw - 50) * x.shrink;
+  });
+  const out = {}; list.forEach(x => { out[x.id] = x; });
+  return out;
+}
+
 export function buildModel(data, format) {
   const players = data.players;
   // data.seasons is newest first, so the seasons after season i are 0..i-1 (oldest first).
@@ -884,9 +912,10 @@ export function buildModel(data, format) {
     });
   });
 
+  const dynDrafts = format === 'dynasty' ? dynastyDrafts(seasons) : [];
   return {
     seasons, managers, career, leaderboard, records, h2h, h2hRecord, rivalry, allTrades, heist, swapCareer,
     nameOf, playerName, playerPos, newest,
-    dynDrafts: format === 'dynasty' ? dynastyDrafts(seasons) : []
+    dynDrafts, scout: scoutGrades(dynDrafts)
   };
 }
