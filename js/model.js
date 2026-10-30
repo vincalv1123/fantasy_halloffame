@@ -1,7 +1,7 @@
 // Turns raw Sleeper data into every stat, award and score the site shows.
 // Pure functions only: nothing here touches the page or the network.
 
-import { CONFIG } from './config.js?v=202610300458';
+import { CONFIG } from './config.js?v=202610300523';
 
 const ELIGIBLE = {
   QB: ['QB'], RB: ['RB'], WR: ['WR'], TE: ['TE'], K: ['K'], DEF: ['DEF'],
@@ -625,7 +625,10 @@ export function dynastyDrafts(seasons) {
     if (!C.graded || !C.picks.length) return;
     const k = C.years;
     const peers = classes.filter(D => D !== C && D.kind === C.kind && D.teams === C.teams && D.years > k && D.picks.length);
-    const cumK = p => p.byYear.slice(0, k).reduce((a, b) => a + b, 0);
+    // If this draft's latest season is still being played, older drafts only get that share of their k-th season.
+    const last = seasons[0];
+    const frac = last && last.isCurrent && Number(C.season) + k - 1 === Number(last.season) ? Math.max(1, last.regWeeks.length) / Math.max(1, last.playoffWeekStart - 1) : 1;
+    const cumK = p => p.byYear.slice(0, k - 1).reduce((a, b) => a + b, 0) + (p.byYear[k - 1] || 0) * frac;
     const pool = peers.length >= 2 ? [].concat.apply([], peers.map(D => D.picks.map(p => ({ at: p.pick_no, v: cumK(p) })))) : null;
     C.basis = pool ? 'history' : 'class';
     const win = Math.max(3, Math.round(C.teams * (pool ? 0.75 : 1)));
@@ -635,7 +638,9 @@ export function dynastyDrafts(seasons) {
       src.forEach(q => { const dd = Math.abs(q.at - p.pick_no); if (dd <= win) { const w = 1 - dd / (win + 1); ws += w; t += w * q.v; } });
       p.expected = ws ? t / ws : 0;
     });
-    const offset = C.picks.reduce((t, p) => t + (p.total - p.expected), 0) / C.picks.length;
+    // Against the picks around it in the same draft, the picks already average out; against history, a strong or
+    // weak class should show, so no re-centering (a player with nothing to show is never above his slot).
+    const offset = 0;
     const lastRound = C.picks.reduce((mx, p) => Math.max(mx, p.round), 1);
     const missW = rd => (lastRound <= 1 ? 1 : 1.5 - 1.1 * (rd - 1) / (lastRound - 1));
     C.picks.forEach(p => { p.expected += offset; p.raw = p.total - p.expected; p.value = p.raw < 0 ? p.raw * missW(p.round) : p.raw; });
