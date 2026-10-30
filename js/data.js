@@ -4,7 +4,7 @@
 
 
 const API = 'https://api.sleeper.app/v1';
-const CACHE_VERSION = 'v6';
+const CACHE_VERSION = 'v7'; // v7: picks carry their draft slot, so traded picks can be valued
 
 // A commissioner's score edit is stored as custom_points; it replaces the computed score when set.
 const scoreOf = m => (m.custom_points != null ? m.custom_points : m.points) || 0;
@@ -86,16 +86,18 @@ async function loadSeason(league, state, isCurrent) {
     get('/league/' + id + '/drafts').catch(() => [])
   ]);
   // Every draft this season (dynasty leagues can have a rookie draft and a supplemental draft).
-  const mapPick = p => ({ round: p.round, pick_no: p.pick_no, player_id: p.player_id, roster_id: p.roster_id, picked_by: p.picked_by,
+  const mapPick = p => ({ round: p.round, pick_no: p.pick_no, draft_slot: p.draft_slot, player_id: p.player_id, roster_id: p.roster_id, picked_by: p.picked_by,
     pos: p.metadata && p.metadata.position, yearsExp: p.metadata && p.metadata.years_exp != null ? Number(p.metadata.years_exp) : null });
   const listed = (draftList || []).slice();
   if (league.draft_id && !listed.some(x => x.draft_id === league.draft_id)) listed.push({ draft_id: league.draft_id, status: 'complete' });
   const drafts = (await Promise.all(listed.filter(x => x.status === 'complete' || x.draft_id === league.draft_id).map(async x => {
-    const ps = (await get('/draft/' + x.draft_id + '/picks').catch(() => [])) || [];
+    const [ps0, info] = await Promise.all([get('/draft/' + x.draft_id + '/picks').catch(() => []), get('/draft/' + x.draft_id).catch(() => null)]);
+    const ps = ps0 || [];
     const withPlayer = ps.filter(p => p.player_id);
     const rookies = withPlayer.filter(p => p.metadata && String(p.metadata.years_exp) === '0').length;
     return { draftId: x.draft_id, type: x.type || null, rounds: (x.settings && x.settings.rounds) || withPlayer.reduce((m, p) => Math.max(m, p.round), 0),
-      start: x.start_time || 0, main: x.draft_id === league.draft_id, rookieShare: withPlayer.length ? rookies / withPlayer.length : 0, picks: ps.map(mapPick) };
+      start: x.start_time || 0, main: x.draft_id === league.draft_id, rookieShare: withPlayer.length ? rookies / withPlayer.length : 0, picks: ps.map(mapPick),
+      slotToRoster: (info && info.slot_to_roster_id) || x.slot_to_roster_id || null };
   }))).filter(x => x.picks.length).sort((a, b) => a.start - b.start);
   // The draft the season pages grade: the league's own draft, or in dynasty the rookie draft when there is one.
   const isDynasty = league.settings && league.settings.type === 2;
@@ -128,6 +130,8 @@ async function loadSeason(league, state, isCurrent) {
     rosters: rosters.map(r => ({ roster_id: r.roster_id, owner_id: r.owner_id, taxi: r.taxi || [], reserve: r.reserve || [] })),
     winners, losers,
     picks: primary ? primary.picks : [],
+    // Draft slot -> original roster, so a traded pick can be found in the draft (and valued at its slot).
+    slotToRoster: primary ? primary.slotToRoster : null,
     drafts,
     matchups: matchups.map(week => (week || []).map(m => ({
       roster_id: m.roster_id, matchup_id: m.matchup_id, points: scoreOf(m),

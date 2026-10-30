@@ -133,7 +133,7 @@ export function rankAnswer(M, P, R) {
       }); });
     if (metric === 'ppg') note = 'Points per game counts weeks the player scored, regular season only, with at least 4 games (2 for the current season).';
   } else if (R.entity === 'trade') {
-    entityLabel = 'trade'; metricLabel = 'net starter points'; fmt = sgn;
+    entityLabel = 'trade'; metricLabel = 'net trade value'; fmt = sgn;
     M.allTrades.forEach(t => { if (P.season && t.season !== P.season) return;
       t.sides.forEach(s => { if (mgr && s.owner !== mgr) return;
         const others = t.sides.filter(x => x !== s).map(x => link(x.owner)).join(' & ');

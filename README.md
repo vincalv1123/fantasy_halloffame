@@ -22,7 +22,7 @@ Each part is scored against the rest of the league that season (50 = average), t
 | Results | 35% | Half win %, half all-play win %, plus bonuses for playoffs, the final and the title |
 | Start/sit | 20% | Points started ÷ points from the best possible lineup |
 | Waivers | 15% | Starter points from waiver and free-agent pickups |
-| Trades | 20% | Starter points gained minus starter points given up |
+| Trades | 20% | Redraft: value got minus value given, rest of season. Each traded player counts his points above a replacement-level starter at his position (never below 0); each traded pick counts what a pick in its slot is expected to give. Dynasty: starter points gained minus given up |
 | Draft | 10% | Each pick's points above a replacement-level starter at its position, compared with what the slot was expected to give: 70% picks around the same slot across the league's drafts, 30% the Nth-best player that season for pick N (`draftHindsight` in config.js) |
 
 The career score averages every season, weighted by games played.
