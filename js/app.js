@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610301645';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610301645';
-import { buildModel, optimalPoints } from './model.js?v=202610301645';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610301645';
+import { CONFIG } from './config.js?v=202610301655';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610301655';
+import { buildModel, optimalPoints } from './model.js?v=202610301655';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610301655';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -1334,13 +1334,13 @@ function openDynTeam(key) {
     <div class="line2" style="align-items:center;justify-content:flex-start;gap:12px"><span class="grade" style="background:${GRADE_COLORS[g]}">${g}</span>
       <span class="stack"><span style="font-size:14px">${ordinal(rank)} of ${C.teams_.length} · <span class="num ${sign(t.value)}">${signed(t.value, 0)}</span> vs. slot · ${t.hits} of ${t.picks.length} hit</span>
       <span class="sub">${confidence(C)} · kept value ${f1(t.picks.reduce((s2, p) => s2 + p.keptValue, 0))} pts (${ordinal(C.teams_.slice().sort((x, y) => y.picks.reduce((s2, p) => s2 + p.keptValue, 0) - x.picks.reduce((s2, p) => s2 + p.keptValue, 0)).indexOf(t) + 1)} of ${C.teams_.length})</span></span></div>
-    <div class="scroll"><table class="table"><thead><tr><th>Pick</th><th style="text-align:left">Player</th>${yearHeads(C)}<th>Total</th><th>Best finish</th><th>For ${name(t.owner)}</th><th>Kept value</th><th>vs. slot</th><th>Grade</th><th>Hit</th></tr></thead><tbody>
+    <div class="scroll"><table class="table"><thead><tr><th>Pick</th><th style="text-align:left">Player</th>${yearHeads(C)}<th>Total</th><th>Best finish</th><th>For ${name(t.owner)}</th><th>Kept value</th><th>Expected</th><th>vs. slot</th><th>Grade</th><th>Hit</th></tr></thead><tbody>
     ${t.picks.slice().sort((x, y) => x.pick_no - y.pick_no).map(p => { const pg = gradeOf(p.z);
       return `<tr><td class="rk" style="width:auto">${pickLabel(C, p)}</td><td class="t">${player(p.player_id)} <span class="note">${esc(p.pos || '')}</span>${tradedTag(p)}</td>${yearCells(C, p)}
         <td>${f1(p.total)}</td><td style="color:#C9D3D2">${p.bestFinish ? esc(p.pos || '') + p.bestFinish : '—'}</td><td style="color:#C9D3D2">${f1(p.mgrPts)}</td>
         <td title="${p.traded ? f1(p.mgrPts) + ' kept + ' + f1(p.traded.returnPts) + ' from the trade' : 'Never traded away'}">${f1(p.keptValue)}${p.traded ? '<span class="note"> incl. trade</span>' : ''}</td>
-        <td class="${sign(p.value)}">${signed(p.value, 0)}</td><td><span class="grade sm" style="background:${GRADE_COLORS[pg]}">${pg}</span></td><td>${hitMark(p)}</td></tr>`; }).join('')}</tbody></table></div>
-    <p class="note" style="margin:0">Y1, Y2… = points above replacement each season since the draft. For ${name(t.owner)} = starter points he scored for this team. Kept value = those points plus, if he was traded away, this team's share of the starter points it got back in that trade (split evenly if several players went out). The grade judges the pick itself; kept value shows what the team actually got out of it. Best finish = his best positional rank in any season.</p>
+        <td style="color:#C9D3D2">${f1(p.expected)}</td><td class="${sign(p.value)}">${signed(p.value, 0)}</td><td><span class="grade sm" style="background:${GRADE_COLORS[pg]}">${pg}</span></td><td>${hitMark(p)}</td></tr>`; }).join('')}</tbody></table></div>
+    <p class="note" style="margin:0">Y1, Y2… = points above replacement each season since the draft. For ${name(t.owner)} = starter points he scored for this team. Kept value = those points plus, if he was traded away, this team's share of the starter points it got back in that trade (split evenly if several players went out). Expected = the Total that pick slot usually reaches after the same number of seasons; vs. slot = Total minus expected (misses count more early). The grade judges the pick itself; kept value shows what the team actually got out of it. Best finish = his best positional rank in any season.</p>
     <a class="btn" href="${mlink(t.owner)}" data-close>Open ${name(t.owner)}'s profile →</a>
   </div>`;
   if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
@@ -1554,14 +1554,14 @@ function openDraftTeam(season, rid) {
       ${showGrades ? `<span class="grade" style="background:${GRADE_COLORS[teamGrade]}">${teamGrade}</span>` : ''}
       <span class="stack"><span style="font-size:14px">${showGrades ? ordinal(rank) + ' of ' + n + ' teams · ' : ''}<span class="${sign(total)} num">${signed(total, 0)}</span> vs. slot${S.isCurrent ? ' so far' : ''}</span>
       <span class="sub">Best: ${best ? player(best.player_id) + ' (R' + best.round + ')' : '—'} · Worst (R1–9): ${worst ? player(worst.player_id) + ' (R' + worst.round + ')' : '—'}</span></span></div>
-    <div class="scroll"><table class="table"><thead><tr><th>Pick</th><th style="text-align:left">Player</th><th>Pts</th><th>Drafted</th><th>Finish</th><th>Above repl.</th>${showSince ? '<th>Since</th>' : ''}<th>vs. slot</th>${showGrades ? '<th>Grade</th>' : ''}</tr></thead><tbody>
+    <div class="scroll"><table class="table"><thead><tr><th>Pick</th><th style="text-align:left">Player</th><th>Pts</th><th>Drafted</th><th>Finish</th><th>Above repl.</th>${showSince ? '<th>Since</th>' : ''}<th>Expected</th><th>vs. slot</th>${showGrades ? '<th>Grade</th>' : ''}</tr></thead><tbody>
     ${picks.map(p => { const g = gradeOf((p.value - m) / sdv);
       return `<tr><td class="rk" style="width:auto">${p.round}.${String(((p.pick_no - 1) % n) + 1).padStart(2, '0')}</td>
         <td class="t">${player(p.player_id)} <span class="note">${esc(p.pos)}</span></td>
         <td>${f1(p.pts)}</td><td style="color:#C9D3D2">${esc(p.pos)}${p.posDrafted}</td><td style="color:#C9D3D2">${S.posRank[p.player_id] ? esc(p.pos) + S.posRank[p.player_id] : '—'}${finishMove(p, S)}</td><td>${signed(p.vor, 0)}</td>
-        ${showSince ? `<td style="color:#C9D3D2">${f1(sincePts(p.player_id))}</td>` : ''}<td class="${sign(p.value)}">${signed(p.value, 0)}</td>
+        ${showSince ? `<td style="color:#C9D3D2">${f1(sincePts(p.player_id))}</td>` : ''}<td style="color:#C9D3D2">${signed(p.expected, 0)}</td><td class="${sign(p.value)}">${signed(p.value, 0)}</td>
         ${showGrades ? `<td><span class="grade sm" style="background:${GRADE_COLORS[g]}">${g}</span></td>` : ''}</tr>`; }).join('')}</tbody></table></div>
-    <p class="note" style="margin:0">${showGrades ? 'Each pick is graded against every pick in the ' + S.season + ' draft: A is a standout pick for its slot, C is about what that slot usually gives, F is far below. ' : ''}vs. slot = points above a replacement-level starter at his position, minus ${slotExp()}. Misses count more early (1.5× in round 1) and less late (0.4× in the last round); hits count in full. Drafted = when his position came off the board; Finish = where he ended up.</p>
+    <p class="note" style="margin:0">${showGrades ? 'Each pick is graded against every pick in the ' + S.season + ' draft: A is a standout pick for its slot, C is about what that slot usually gives, F is far below. ' : ''}Expected = the above-repl. that pick was expected to give: ${slotExp()}. vs. slot = points above a replacement-level starter at his position, minus expected. Misses count more early (1.5× in round 1) and less late (0.4× in the last round); hits count in full. Drafted = when his position came off the board; Finish = where he ended up.</p>
     <a class="btn" href="${mlink(id)}@${S.season}" data-close>Open ${name(id)}'s ${S.season} profile →</a>
   </div>`;
   if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
