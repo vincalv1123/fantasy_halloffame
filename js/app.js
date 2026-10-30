@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610302240';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610302240';
-import { buildModel, optimalPoints } from './model.js?v=202610302240';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610302240';
+import { CONFIG } from './config.js?v=202610302300';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610302300';
+import { buildModel, optimalPoints } from './model.js?v=202610302300';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610302300';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -962,9 +962,12 @@ function managerMoves(id) {
     <span class="year">${x.S.season}</span><span class="sub" style="min-width:0">${sub}${so(x)}</span><span class="num ${cls}" style="font-size:14px">${v}</span></a>`;
   // Waivers.
   const wPts = list.reduce((t, x) => t + x.waiv.pts, 0); const wAdds = list.reduce((t, x) => t + x.waiv.adds, 0);
-  const wBest = list.map(x => x.waiv.best && { x, b: x.waiv.best }).filter(Boolean).sort((a, b) => b.b.pts - a.b.pts)[0];
+  // Best pickups and picks leave out kickers and defenses.
+  const skill = pid => { const pos = M.playerPos(pid); return pos !== 'K' && pos !== 'DEF' && !/^[A-Z]{2,3}$/.test(pid); };
+  const topAdd = x => (x.waiv.list || []).filter(a => skill(a.pid)).sort((a, b) => b.pts - a.pts)[0] || null;
+  const wBest = list.map(x => topAdd(x) && { x, b: topAdd(x) }).filter(Boolean).sort((a, b) => b.b.pts - a.b.pts)[0];
   const waivers = panel('Waivers', big(signed(wPts), sign(wPts), `${wAdds} pickup${wAdds === 1 ? '' : 's'}${wBest && wBest.b.pts > 0 ? ' · best: ' + player(wBest.b.pid) + ' (' + wBest.x.S.season + ', ' + signed(wBest.b.pts) + ')' : ''}`),
-    list.map(x => row(x, signed(x.waiv.pts), sign(x.waiv.pts), `${x.waiv.adds} add${x.waiv.adds === 1 ? '' : 's'}${x.waiv.best && x.waiv.best.pts > 0 ? ' · ' + player(x.waiv.best.pid) : ''}`)).join(''),
+    list.map(x => row(x, signed(x.waiv.pts), sign(x.waiv.pts), `${x.waiv.adds} add${x.waiv.adds === 1 ? '' : 's'}${topAdd(x) && topAdd(x).pts > 0 ? ' · ' + player(topAdd(x).pid) : ''}`)).join(''),
     'Points above a replacement-level starter, for every start.');
   // Trades.
   const sides = x => x.S.trades.map(t => t.sides.find(sd => sd.rid === x.r)).filter(Boolean);
@@ -980,7 +983,7 @@ function managerMoves(id) {
   if (!dyn) {
     const dl = list.filter(x => x.picks > 0);
     const dVal = dl.reduce((t, x) => t + (x.draftVal || 0), 0); const dPicks = dl.reduce((t, x) => t + x.picks, 0);
-    const bestOf = x => x.S.picks.filter(p => p.roster_id === x.r).sort((a, b) => b.value - a.value)[0];
+    const bestOf = x => x.S.picks.filter(p => p.roster_id === x.r && p.pos !== 'K' && p.pos !== 'DEF').sort((a, b) => b.value - a.value)[0];
     const dBest = dl.map(x => ({ x, p: bestOf(x) })).filter(y => y.p).sort((a, b) => b.p.value - a.p.value)[0];
     draft = panel('Draft', dl.length ? big(signed(dVal, 0), sign(dVal), `${dPicks} picks in ${dl.length} draft${dl.length === 1 ? '' : 's'}${dBest ? ' · best: ' + player(dBest.p.player_id) + ' (' + dBest.x.S.season + ', ' + signed(dBest.p.value, 0) + ')' : ''}`) : '<span class="note">No drafts yet</span>',
       dl.map(x => { const b = bestOf(x); return `<button type="button" class="row rowbtn" data-draft-team="${x.S.season}:${x.r}" style="grid-template-columns:44px minmax(0,1fr) auto;text-align:left;width:100%">
