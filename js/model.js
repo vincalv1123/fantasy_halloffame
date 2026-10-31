@@ -1,7 +1,7 @@
 // Turns raw Sleeper data into every stat, award and score the site shows.
 // Pure functions only: nothing here touches the page or the network.
 
-import { CONFIG } from './config.js?v=202610311535';
+import { CONFIG } from './config.js?v=202610311545';
 
 const ELIGIBLE = {
   QB: ['QB'], RB: ['RB'], WR: ['WR'], TE: ['TE'], K: ['K'], DEF: ['DEF'],
@@ -862,7 +862,20 @@ export function dynastyDrafts(seasons) {
     // Blend with a standard rookie-draft curve (value falling off smoothly by pick), trusting the league's own
     // history more as it builds up: 2 older drafts = 40% history, 4 = 57%, 8 = 73%. Within one draft: 50/50.
     const src0 = pool || C.picks.map(q => ({ at: q.pick_no, v: q.total }));
-    const lam = Math.max(4, C.teams * 1.2);
+    // Rookie drafts use the standard drop-off. A startup is many times longer, so its curve's drop-off is fitted to
+    // the picks themselves (the steepness that best matches what they produced); the rookie curve stretched over a
+    // 200-pick startup expected far too much from the first rounds.
+    let lam = Math.max(4, C.teams * 1.2);
+    if (C.kind === 'startup') {
+      let best = Infinity;
+      for (let L = 4; L <= Math.max(8, C.picks.length); L += 2) {
+        const sh = k => Math.exp(-(k - 1) / L);
+        const lv = mean(src0.map(q => q.v)) / (mean(src0.map(q => sh(q.at))) || 1);
+        const err = src0.reduce((t, q) => t + Math.pow(lv * sh(q.at) - q.v, 2), 0);
+        if (err < best) { best = err; lam = L; }
+      }
+    }
+    C.lam = lam;
     const shape = k => Math.exp(-(k - 1) / lam);
     const level = mean(src0.map(q => q.v)) / (mean(src0.map(q => shape(q.at))) || 1);
     const trust = pool ? peers.length / (peers.length + 3) : 0.5;
