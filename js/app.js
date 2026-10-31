@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610310105';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610310105';
-import { buildModel, optimalPoints } from './model.js?v=202610310105';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610310105';
+import { CONFIG } from './config.js?v=202610311430';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons, checkOwner, saveOwner } from './data.js?v=202610311430';
+import { buildModel, optimalPoints } from './model.js?v=202610311430';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610311430';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -871,6 +871,8 @@ function viewManager(id, seasonSel) {
     ${M.managers[id].teamNames.length ? `<span class="note">Team names: ${M.managers[id].teamNames.map(esc).join(' · ')}</span>` : ''}
     <nav class="chips" aria-label="Choose a season" style="padding-top:6px"><a class="pill${sel ? '' : ' on'}" href="${mlink(id)}">Career</a>
     ${list.map(x => `<a class="pill${sel === x ? ' on' : ''}" href="${mlink(id)}@${x.S.season}">${x.S.isCurrent ? '<span class="dot"></span>' : ''}${x.S.season}</a>`).join('')}</nav>`, 'hero'));
+  const who = ownerBox(id);
+  if (who) out.push(section(who));
 
   if (sel) {
     const x = sel; const S = x.S; const st = x.st;
@@ -1789,6 +1791,70 @@ function viewAwards() {
   out.push(section(`<h2>Season awards</h2>${keys.filter(k => !isMajor(k)).map(awardBlock).join('')}`));
   return out.join('');
 }
+
+// ---------- managers Sleeper lost ----------
+// A roster Sleeper lists with no owner shows as "Team 10". Its profile offers to name the manager: the site checks
+// the Sleeper username against the league's history and saves the answer in this browser.
+function ownerBox(id) {
+  const claims = (M.managers[id] && M.managers[id].claims) || [];
+  if (!claims.length) return '';
+  return claims.map(c => {
+    const label = `${c.season} · roster ${c.rid}`;
+    const form = `<form class="search" data-owner-form data-league="${esc(c.leagueId)}" data-rid="${c.rid}" style="margin-top:8px">
+      <label class="sr" for="own-${c.leagueId}-${c.rid}">Sleeper username</label>
+      <input id="own-${c.leagueId}-${c.rid}" name="u" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Their Sleeper username">
+      <button type="submit" class="go">Check</button></form><div class="owner-result" aria-live="polite"></div>`;
+    if (c.source === 'saved') return `<div class="box"><span class="note" style="text-transform:uppercase;letter-spacing:.05em;font-size:11px">Manager set in this browser · ${label}</span>
+      <p class="note" style="margin:6px 0">Sleeper doesn’t list who ran this team, so this browser saved ${esc(M.managers[id].name)} for it.</p>
+      <button type="button" class="btn" data-owner-clear data-league="${esc(c.leagueId)}" data-rid="${c.rid}">Remove this</button>
+      <details style="margin-top:8px"><summary class="note">Change it</summary>${form}</details></div>`;
+    if (c.source === 'moves') return `<div class="box"><span class="note" style="text-transform:uppercase;letter-spacing:.05em;font-size:11px">Matched from the team’s moves · ${label}</span>
+      <p class="note" style="margin:6px 0">Sleeper doesn’t list who ran this team, but ${esc(M.managers[id].name)} made ${c.moves.made} of its ${c.moves.total} waiver and free-agent moves that season.</p>
+      <details><summary class="note">Not right? Name the manager</summary>${form}</details></div>`;
+    return `<div class="box"><span class="note" style="text-transform:uppercase;letter-spacing:.05em;font-size:11px">Unknown manager · ${label}</span>
+      <p class="note" style="margin:6px 0">Sleeper doesn’t list who ran this team that season. Know who it was? Enter their Sleeper username: the site checks it against the league’s history and saves it in this browser.</p>${form}</div>`;
+  }).join('');
+}
+// Reload the league, then open the profile of whoever now holds that season's roster.
+async function reloadLeague(leagueId, rid) {
+  const fresh = await loadAll(LG, () => {});
+  M = buildModel(fresh, LG.format); M.px = PX; M.league = LG;
+  document.getElementById('meta').textContent = describe(M, LG);
+  const S = M.seasons.find(x => x.leagueId === leagueId);
+  const goTo = S && S.ownerOf[rid] != null ? mlink(S.ownerOf[rid]) : null;
+  if (goTo && location.hash !== goTo) location.hash = goTo; else render();
+}
+document.addEventListener('submit', async e => {
+  const f = e.target.closest('[data-owner-form]');
+  if (!f) return;
+  e.preventDefault();
+  const out = f.nextElementSibling; const u = f.u.value.trim();
+  if (!u) return;
+  out.innerHTML = '<p class="note">Checking Sleeper…</p>';
+  const r = await checkOwner(f.dataset.league, f.dataset.rid, u).catch(() => null);
+  if (!r) { out.innerHTML = '<p class="note down">Couldn’t reach Sleeper. Try again.</p>'; return; }
+  if (!r.found) { out.innerHTML = `<p class="note down">No Sleeper account named “${esc(u)}”.</p>`; return; }
+  const checks = [
+    [r.total ? r.made > 0 : null, r.total ? `Made ${r.made} of this team’s ${r.total} waiver and free-agent moves in ${r.season}` : `This team made no waiver or free-agent moves in ${r.season}, so moves can’t confirm it`],
+    [r.elsewhere.length > 0, r.elsewhere.length ? `Managed in this league in ${r.elsewhere.join(', ')}` : 'No other seasons in this league'],
+    [r.listed, r.listed ? `Sleeper still lists this ${r.season} league as theirs` : `Sleeper doesn’t list this ${r.season} league as theirs (normal if they were removed)`]
+  ];
+  if (r.taken) checks.unshift([false, `Already runs a different team in ${r.season}`]);
+  out.innerHTML = `<div class="box" style="margin-top:8px"><div class="line2"><span style="font-weight:600">${esc(r.user.display_name)}</span>
+    <span class="tag ${r.confirmed ? 'up' : 'down'}">${r.confirmed ? 'Confirmed' : 'Not confirmed'}</span></div>
+    <ul class="note" style="margin:6px 0 10px;padding-left:18px">${checks.map(([ok, t]) => `<li><span class="${ok === true ? 'up' : ok === false ? 'down' : ''}">${ok === true ? '✓' : ok === false ? '✗' : '–'}</span> ${t}</li>`).join('')}</ul>
+    ${r.taken ? '' : `<button type="button" class="btn" data-owner-save data-league="${esc(f.dataset.league)}" data-rid="${f.dataset.rid}" data-user="${esc(r.user.user_id)}">${r.confirmed ? 'Save' : 'Save anyway'}</button>`}
+    <p class="note" style="margin:8px 0 0">Saved in this browser only. Other visitors still see Sleeper’s data (or the match from the team’s moves).</p></div>`;
+});
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-owner-save],[data-owner-clear]');
+  if (!b) return;
+  e.preventDefault();
+  b.disabled = true; b.textContent = 'Saving…';
+  const uid = b.dataset.user || null;
+  saveOwner(b.dataset.league, b.dataset.rid, uid);
+  try { await reloadLeague(b.dataset.league, Number(b.dataset.rid)); } catch (err) { b.textContent = 'Couldn’t reload'; }
+});
 
 // ---------- Stat search ----------
 let lastQuery = '';

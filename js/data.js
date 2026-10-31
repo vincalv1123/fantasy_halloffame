@@ -4,7 +4,7 @@
 
 
 const API = 'https://api.sleeper.app/v1';
-const CACHE_VERSION = 'v7'; // v7: picks carry their draft slot, so traded picks can be valued
+const CACHE_VERSION = 'v8'; // v8: moves carry who made them, so ownerless rosters can be matched to a manager
 
 // A commissioner's score edit is stored as custom_points; it replaces the computed score when set.
 const scoreOf = m => (m.custom_points != null ? m.custom_points : m.points) || 0;
@@ -139,7 +139,7 @@ async function loadSeason(league, state, isCurrent) {
     }))),
     transactions: [].concat.apply([], transactions).filter(t => t && t.status === 'complete').map(t => ({
       type: t.type, leg: t.leg, adds: t.adds || {}, drops: t.drops || {}, roster_ids: t.roster_ids || [],
-      bid: t.settings && t.settings.waiver_bid, created: t.created,
+      bid: t.settings && t.settings.waiver_bid, created: t.created, creator: t.creator || null,
       picks: (t.draft_picks || []).map(d => ({ season: d.season, round: d.round, from: d.previous_owner_id, to: d.owner_id, orig: d.roster_id }))
     }))
   };
@@ -168,9 +168,77 @@ export async function loadAll(league, onProgress) {
     }
     seasons.push(season);
   }
+  await fillOwners(seasons);
   onProgress && onProgress('Loading player names…');
   const players = await loadPlayers();
-  return { state, seasons: seasons.sort((a, b) => Number(b.season) - Number(a.season)), players };
+  const out = { state, seasons: seasons.sort((a, b) => Number(b.season) - Number(a.season)), players };
+  lastData = out;
+  return out;
+}
+
+// ---------- managers Sleeper lost ----------
+// When a manager leaves mid-season, Sleeper can clear the roster's owner, so the team shows as "Team 10".
+// Each such roster gets its manager from, in order: a name this browser saved for it, then whoever made that
+// roster's own moves (waiver and free-agent adds) that season, since Sleeper still records who made each move.
+let lastData = null;
+const OWNERS_KEY = 'hofOwners'; // { "<leagueId>:<rosterId>": userId }, kept outside the season cache
+function savedOwners() { try { return JSON.parse(localStorage.getItem(OWNERS_KEY) || '{}'); } catch (e) { return {}; } }
+export function saveOwner(leagueId, rid, userId) {
+  const o = savedOwners();
+  if (userId) o[leagueId + ':' + rid] = userId; else delete o[leagueId + ':' + rid];
+  try { localStorage.setItem(OWNERS_KEY, JSON.stringify(o)); return true; } catch (e) { return false; }
+}
+// Who made a roster's own moves that season: { userId: count }, plus the total.
+function moveMakers(season, rid) {
+  const by = {}; let total = 0;
+  (season.transactions || []).forEach(t => {
+    if (t.type === 'trade' || !t.creator || (t.roster_ids || []).length !== 1 || String(t.roster_ids[0]) !== String(rid)) return;
+    by[t.creator] = (by[t.creator] || 0) + 1; total++;
+  });
+  return { by, total };
+}
+async function addUser(season, userId) {
+  if (season.users.some(u => u.user_id === userId)) return;
+  const u = await get('/user/' + userId).catch(() => null);
+  season.users.push({ user_id: userId, display_name: u ? u.display_name : 'Unknown manager', team_name: null, avatar: u ? u.avatar : null });
+}
+async function fillOwners(seasons) {
+  const saved = savedOwners();
+  for (const season of seasons) {
+    for (const r of season.rosters) {
+      // Only rosters Sleeper left without an owner (or ones this browser re-assigned).
+      const key = season.leagueId + ':' + r.roster_id;
+      if (r.owner_id && !saved[key]) continue;
+      if (r.originalOwner === undefined) r.originalOwner = r.owner_id || null;
+      const clash = saved[key] && season.rosters.some(x => x !== r && x.owner_id === saved[key]);
+      if (saved[key] && !clash) { r.owner_id = saved[key]; r.ownerSource = 'saved'; await addUser(season, r.owner_id); continue; }
+      if (r.originalOwner) { r.owner_id = r.originalOwner; continue; }
+      const m = moveMakers(season, r.roster_id);
+      const top = Object.keys(m.by).sort((a, b) => m.by[b] - m.by[a])[0];
+      // Most of the roster's moves, and not someone who already has a roster that season (a commissioner fixing things).
+      if (top && m.by[top] >= 3 && m.by[top] / m.total >= 0.6 && !season.rosters.some(x => x.owner_id === top)) {
+        r.owner_id = top; r.ownerSource = 'moves'; r.ownerMoves = { made: m.by[top], total: m.total };
+        await addUser(season, top);
+      }
+    }
+  }
+}
+// Checks a Sleeper username against a roster's history: the roster's moves that season, the person's other
+// seasons in this league, and whether Sleeper still lists the league among theirs.
+export async function checkOwner(leagueId, rid, username) {
+  const user = await get('/user/' + encodeURIComponent(username.trim())).catch(() => null);
+  if (!user || !user.user_id) return { found: false };
+  const seasons = (lastData && lastData.seasons) || [];
+  const season = seasons.find(x => x.leagueId === leagueId);
+  if (!season) return { found: true, user, error: 'season not loaded' };
+  const m = moveMakers(season, rid);
+  const made = m.by[user.user_id] || 0;
+  const elsewhere = seasons.filter(x => x !== season && x.rosters.some(r => r.owner_id === user.user_id)).map(x => x.season).sort();
+  const taken = season.rosters.find(r => r.owner_id === user.user_id && String(r.roster_id) !== String(rid));
+  const theirs = await get('/user/' + user.user_id + '/leagues/nfl/' + season.season).catch(() => []);
+  const listed = (theirs || []).some(l => l.league_id === leagueId);
+  const confirmed = !taken && (made > 0 && made / Math.max(1, m.total) >= 0.5 || (m.total === 0 && (elsewhere.length > 0 || listed)));
+  return { found: true, user, season: season.season, made, total: m.total, elsewhere, listed, taken: !!taken, confirmed };
 }
 
 // Just the current week's scores, for the live tab's refresh.

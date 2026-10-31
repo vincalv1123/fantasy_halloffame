@@ -32,6 +32,8 @@ Dynasty leagues leave the draft out of the score (the other parts are reweighted
 ## Files
 
 - `index.html`, `style.css`: the page
+**Managers Sleeper lost.** When a manager leaves mid-season, Sleeper can clear the roster's owner, so the team would show as "Team 10". The site credits that roster to whoever made most of its waiver and free-agent moves that season (Sleeper still records who made each move). On that manager's profile, anyone can name a different Sleeper user: the site checks the username against the league's history (the roster's moves, their other seasons in the league, and their own Sleeper league list) and saves the answer in that browser.
+
 - `js/config.js`: score weights, bonuses and simulation settings
 - `js/data.js`: loading from Sleeper (finished seasons are cached in the visitor's browser)
 - `js/model.js`: all stats, scores and odds

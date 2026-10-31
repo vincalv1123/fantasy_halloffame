@@ -1,7 +1,7 @@
 // Turns raw Sleeper data into every stat, award and score the site shows.
 // Pure functions only: nothing here touches the page or the network.
 
-import { CONFIG } from './config.js?v=202610310105';
+import { CONFIG } from './config.js?v=202610311430';
 
 const ELIGIBLE = {
   QB: ['QB'], RB: ['RB'], WR: ['WR'], TE: ['TE'], K: ['K'], DEF: ['DEF'],
@@ -924,9 +924,11 @@ export function buildModel(data, format) {
     raw.rosters.forEach(r => {
       const id = r.owner_id || ('roster-' + raw.season + '-' + r.roster_id);
       const u = raw.users.find(x => x.user_id === r.owner_id);
-      if (!managers[id]) managers[id] = { id, name: u ? u.display_name : 'Team ' + r.roster_id, avatar: u && u.avatar, teamNames: [], seasons: [] };
+      if (!managers[id]) managers[id] = { id, name: u ? u.display_name : 'Team ' + r.roster_id, avatar: u && u.avatar, teamNames: [], seasons: [], claims: [] };
       if (u && u.team_name && managers[id].teamNames.indexOf(u.team_name) < 0) managers[id].teamNames.push(u.team_name);
       managers[id].seasons.push(raw.season);
+      // Rosters Sleeper lost the owner of: how this one was matched (see fillOwners in data.js), or unmatched.
+      if (!r.owner_id || r.ownerSource) managers[id].claims.push({ season: raw.season, leagueId: raw.leagueId, rid: r.roster_id, source: r.ownerSource || null, moves: r.ownerMoves || null });
     });
   });
   const nameOf = id => (managers[id] ? managers[id].name : 'Unknown');
