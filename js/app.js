@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610311515';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons, checkOwner, saveOwner } from './data.js?v=202610311515';
-import { buildModel, optimalPoints } from './model.js?v=202610311515';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610311515';
+import { CONFIG } from './config.js?v=202610311525';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons, checkOwner, saveOwner } from './data.js?v=202610311525';
+import { buildModel, optimalPoints } from './model.js?v=202610311525';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610311525';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -174,7 +174,8 @@ function openRank(key) {
 document.addEventListener('click', e => { const b = e.target.closest('[data-rank]'); if (b) { e.preventDefault(); openRank(b.dataset.rank); } });
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-trade]');
-  if (b) { e.preventDefault(); openTrade(Number(b.dataset.trade)); }
+  const link = e.target.closest('a');
+  if (b && !(link && b.contains(link))) { e.preventDefault(); openTrade(Number(b.dataset.trade)); }
 });
 
 // ---------- tabs ----------
@@ -1360,6 +1361,9 @@ document.addEventListener('click', e => {
   e.preventDefault(); openMatchup(b.dataset.matchup);
 });
 document.addEventListener('keydown', e => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('div[role="button"]')) { e.preventDefault(); e.target.click(); }
+});
+document.addEventListener('keydown', e => {
   if (e.key !== 'Enter' && e.key !== ' ') return;
   const b = e.target.closest && e.target.closest('.mclick[data-matchup]');
   if (b && e.target === b) { e.preventDefault(); openMatchup(b.dataset.matchup); }
@@ -1707,6 +1711,8 @@ function openDraftTeam(season, rid) {
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-draft-team]');
   if (!b) return;
+  const link = e.target.closest('a');
+  if (link && b.contains(link)) return;
   e.preventDefault();
   const [season, rid] = b.dataset.draftTeam.split(':');
   openDraftTeam(season, Number(rid));
@@ -1790,9 +1796,11 @@ function viewAwards() {
     return `<details class="calc aw-${tier}"${key === 'champion' || key === 'sacko' ? ' open' : ''}><summary><span style="display:flex;align-items:center;gap:8px"><span class="dot"></span>${esc(seen[key])}</span></summary>
       <div class="calc-body" style="padding-top:4px">${awardDesc(key) ? `<p class="award-desc">${awardDesc(key)}</p>` : ''}<div class="rows">${entries.map(({ S, a }) => {
         // Trades, drafts and games open their popup; the other awards go to the manager's season.
-        const inner = `<span class="year">${S.season}</span><span class="stack"><span class="name" style="font-size:14px">${name(S.ownerOf[a.rid])}${S.isCurrent ? ' <span class="note">so far</span>' : ''}</span><span class="sub">${a.d}</span></span>
+        // The name links to the manager's season; the rest of the row opens the popup.
+        const who = a.open ? `<a class="name" href="${mlink(S.ownerOf[a.rid])}@${S.season}" style="font-size:14px">${name(S.ownerOf[a.rid])}</a>` : `<span class="name" style="font-size:14px">${name(S.ownerOf[a.rid])}</span>`;
+        const inner = `<span class="year">${S.season}</span><span class="stack"><span>${who}${S.isCurrent ? ' <span class="note">so far</span>' : ''}</span><span class="sub">${a.d}</span></span>
         <span class="num" style="font-size:14px">${a.v}</span>`;
-        return a.open ? `<button type="button" class="row rowbtn"${a.open} style="grid-template-columns:52px minmax(0,1fr) auto;text-align:left;width:100%">${inner}</button>`
+        return a.open ? `<div class="row rowbtn"${a.open} role="button" tabindex="0" style="grid-template-columns:52px minmax(0,1fr) auto;cursor:pointer">${inner}</div>`
           : `<a class="row" href="${mlink(S.ownerOf[a.rid])}@${S.season}" style="grid-template-columns:52px minmax(0,1fr) auto">${inner}</a>`;
       }).join('')}</div></div></details>`;
   };
