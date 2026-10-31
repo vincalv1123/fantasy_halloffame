@@ -16,7 +16,7 @@ export const CONFIG = {
   kDefWeight: 0.5,
 
   // Bonus points added to the Results part of the score.
-  bonus: { playoffs: 3, final: 5, title: 10 },
+  bonus: { playoffs: 3, final: 5, title: 15 },
 
   // How often the live tab refreshes scores while open (seconds).
   liveRefreshSeconds: 60,
