@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610310050';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610310050';
-import { buildModel, optimalPoints } from './model.js?v=202610310050';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610310050';
+import { CONFIG } from './config.js?v=202610310105';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons } from './data.js?v=202610310105';
+import { buildModel, optimalPoints } from './model.js?v=202610310105';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610310105';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -1750,22 +1750,6 @@ function allTimeTotals() {
     draftBest: pick('draft', 1, hasDrafts), draftWorst: pick('draft', -1, hasDrafts)
   };
 }
-// The all-time rows shown at the top of an award's dropdown: [label, manager totals, value, detail].
-function allTimeRows(key) {
-  if (LG.format === 'dynasty' || !completed().length) return [];
-  const a = allTimeTotals();
-  const w = x => [signed(x.waiver) + ' pts', x.adds + ' pickup' + (x.adds === 1 ? '' : 's') + ', points above replacement for every start'];
-  const tr = x => [signed(x.trade), x.trades + ' trade' + (x.trades === 1 ? '' : 's') + ', value got minus value given'];
-  const dr = x => [signed(x.draft, 0), x.picks + ' picks in ' + x.drafts + ' draft' + (x.drafts === 1 ? '' : 's') + ', positional value vs. draft slot'];
-  const rows = {
-    waiver: [['All-time Waiver Wire King', a.waiverBest, w, 'up'], ['All-time worst on the wire', a.waiverWorst, w, 'down']],
-    trade: [['Best trade +/− ever', a.tradeBest, tr, 'up']],
-    fleeced: [['Worst trade +/− ever', a.tradeWorst, tr, 'down']],
-    steal: [['Most draft value vs. slot ever', a.draftBest, dr, 'up']],
-    bust: [['Least draft value vs. slot ever', a.draftWorst, dr, 'down']]
-  }[key] || [];
-  return rows.filter(r => r[1]);
-}
 
 const AWARD_ORDER = ['champion', 'runnerUp', 'regSeason', 'bestMgr', 'waiver', 'trade', 'steal', 'scout', 'highScore', 'luckiest', 'worstMgr', 'bust', 'fleeced', 'unluckiest', 'blunder', 'sacko'];
 function viewAwards() {
@@ -1795,10 +1779,7 @@ function viewAwards() {
     const entries = bySeason.map(({ S, list }) => ({ S, a: list.find(x => x.key === key) })).filter(x => x.a);
     const tier = key === 'sacko' ? 'sacko' : entries[0].a.major ? 'major' : entries[0].a.good ? 'good' : 'bad';
     return `<details class="calc aw-${tier}"${key === 'champion' || key === 'sacko' ? ' open' : ''}><summary><span style="display:flex;align-items:center;gap:8px"><span class="dot"></span>${esc(seen[key])}</span></summary>
-      <div class="calc-body" style="padding-top:4px">${awardDesc(key) ? `<p class="award-desc">${awardDesc(key)}</p>` : ''}${allTimeRows(key).length ? `<span class="note" style="text-transform:uppercase;letter-spacing:.05em;font-size:11px">All time · finished seasons</span>
-        <div class="rows" style="margin-bottom:12px">${allTimeRows(key).map(([label, x, fmt, cls]) => { const [v, d] = fmt(x); return `<a class="row" href="${mlink(x.id)}" style="grid-template-columns:minmax(0,1fr) auto">
-          <span class="stack"><span class="name" style="font-size:14px">${name(x.id)}</span><span class="sub">${label} · ${d}</span></span><span class="num ${cls}" style="font-size:14px">${v}</span></a>`; }).join('')}</div>
-        <span class="note" style="text-transform:uppercase;letter-spacing:.05em;font-size:11px">By season</span>` : ''}<div class="rows">${entries.map(({ S, a }) => `<a class="row" href="${mlink(S.ownerOf[a.rid])}@${S.season}" style="grid-template-columns:52px minmax(0,1fr) auto">
+      <div class="calc-body" style="padding-top:4px">${awardDesc(key) ? `<p class="award-desc">${awardDesc(key)}</p>` : ''}<div class="rows">${entries.map(({ S, a }) => `<a class="row" href="${mlink(S.ownerOf[a.rid])}@${S.season}" style="grid-template-columns:52px minmax(0,1fr) auto">
         <span class="year">${S.season}</span><span class="stack"><span class="name" style="font-size:14px">${name(S.ownerOf[a.rid])}${S.isCurrent ? ' <span class="note">so far</span>' : ''}</span><span class="sub">${a.d}</span></span>
         <span class="num" style="font-size:14px">${a.v}</span></a>`).join('')}</div></div></details>`;
   };
