@@ -1,7 +1,7 @@
 // Turns raw Sleeper data into every stat, award and score the site shows.
 // Pure functions only: nothing here touches the page or the network.
 
-import { CONFIG } from './config.js?v=202610311545';
+import { CONFIG } from './config.js?v=202610311600';
 
 const ELIGIBLE = {
   QB: ['QB'], RB: ['RB'], WR: ['WR'], TE: ['TE'], K: ['K'], DEF: ['DEF'],
@@ -775,6 +775,35 @@ function dynastyTradeValues(pre) {
   return { player, pick, yearsIn, windowDone, N };
 }
 
+// Startup history: what a startup pick was worth (the draft grades' Total) after 1-8 seasons, by overall pick in a
+// 12-team superflex PPR league. Built from real NFL players (2016 startups) across eight simulated leagues, averaged and
+// smoothed. Pick numbers are scaled to the league's size; a season still in progress counts for the share played.
+const STARTUP_PTS = [1, 2, 3, 4, 6, 8, 10, 12, 15, 18, 24, 30, 36, 48, 60, 72, 96, 120, 144, 180, 216, 264];
+const STARTUP_HISTORY = [
+  [103, 103, 102, 102, 96, 90, 88, 81, 71, 68, 62, 58, 58, 58, 58, 57, 36, 23, 20, 17, 8, 3],
+  [227, 227, 226, 226, 216, 199, 197, 192, 173, 166, 138, 107, 99, 87, 87, 86, 59, 43, 35, 29, 17, 7],
+  [317, 317, 315, 315, 305, 282, 275, 263, 241, 228, 186, 138, 126, 110, 110, 110, 94, 70, 51, 44, 21, 15],
+  [361, 361, 361, 361, 357, 333, 328, 316, 288, 268, 217, 164, 148, 128, 128, 128, 106, 89, 57, 48, 22, 17],
+  [398, 398, 398, 398, 398, 372, 367, 355, 321, 294, 237, 178, 161, 149, 149, 149, 118, 101, 67, 54, 24, 20],
+  [409, 409, 409, 409, 409, 383, 378, 366, 333, 307, 251, 193, 173, 160, 160, 160, 124, 108, 75, 56, 25, 21],
+  [413, 413, 413, 413, 413, 388, 384, 373, 338, 313, 258, 201, 179, 170, 170, 170, 128, 114, 80, 56, 26, 23],
+  [438, 438, 438, 438, 436, 408, 402, 388, 348, 319, 263, 206, 184, 175, 175, 175, 130, 115, 81, 56, 27, 25]];
+function startupHistory(pick, teams, seasons, frac) {
+  const x = (pick - 1) * 12 / (teams || 12) + 1;
+  const at = row => {
+    const P = STARTUP_PTS;
+    if (x >= P[P.length - 1]) return row[row.length - 1] * Math.exp(-(x - P[P.length - 1]) / 60);
+    let i = 0; while (P[i + 1] < x) i++;
+    const f = (x - P[i]) / (P[i + 1] - P[i]);
+    return row[i] * (1 - f) + row[i + 1] * f;
+  };
+  const k = Math.max(1, Math.min(STARTUP_HISTORY.length, seasons));
+  const full = at(STARTUP_HISTORY[k - 1]);
+  if (frac >= 1 || seasons > STARTUP_HISTORY.length) return full;
+  const prev = k > 1 ? at(STARTUP_HISTORY[k - 2]) : 0;
+  return prev + (full - prev) * frac;
+}
+
 export function dynastyDrafts(seasons) {
   const bySeason = {}; seasons.forEach(S => { bySeason[S.season] = S; });
   const newest = seasons.length ? Number(seasons[0].season) : 0;
@@ -862,25 +891,15 @@ export function dynastyDrafts(seasons) {
     // Blend with a standard rookie-draft curve (value falling off smoothly by pick), trusting the league's own
     // history more as it builds up: 2 older drafts = 40% history, 4 = 57%, 8 = 73%. Within one draft: 50/50.
     const src0 = pool || C.picks.map(q => ({ at: q.pick_no, v: q.total }));
-    // Rookie drafts use the standard drop-off. A startup is many times longer, so its curve's drop-off is fitted to
-    // the picks themselves (the steepness that best matches what they produced); the rookie curve stretched over a
-    // 200-pick startup expected far too much from the first rounds.
-    let lam = Math.max(4, C.teams * 1.2);
-    if (C.kind === 'startup') {
-      let best = Infinity;
-      for (let L = 4; L <= Math.max(8, C.picks.length); L += 2) {
-        const sh = k => Math.exp(-(k - 1) / L);
-        const lv = mean(src0.map(q => q.v)) / (mean(src0.map(q => sh(q.at))) || 1);
-        const err = src0.reduce((t, q) => t + Math.pow(lv * sh(q.at) - q.v, 2), 0);
-        if (err < best) { best = err; lam = L; }
-      }
-    }
-    C.lam = lam;
+    // Rookie drafts use the standard drop-off. A startup uses a historical curve instead (STARTUP_HISTORY): what each
+    // startup pick was worth after the same number of seasons, from real NFL players in a 12-team superflex PPR league.
+    const lam = Math.max(4, C.teams * 1.2);
     const shape = k => Math.exp(-(k - 1) / lam);
     const level = mean(src0.map(q => q.v)) / (mean(src0.map(q => shape(q.at))) || 1);
     const trust = pool ? peers.length / (peers.length + 3) : 0.5;
     C.trust = trust;
-    C.picks.forEach(p => { p.expected = trust * p.expected + (1 - trust) * level * shape(p.pick_no); });
+    const standard = C.kind === 'startup' ? (at => startupHistory(at, C.teams, k, frac)) : (at => level * shape(at));
+    C.picks.forEach(p => { p.expected = trust * p.expected + (1 - trust) * standard(p.pick_no); });
     smoothBySlot(C.picks);
     // Against the picks around it in the same draft, the picks already average out; against history, a strong or
     // weak class should show, so no re-centering (a player with nothing to show is never above his slot).
