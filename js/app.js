@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610311525';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons, checkOwner, saveOwner } from './data.js?v=202610311525';
-import { buildModel, optimalPoints } from './model.js?v=202610311525';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610311525';
+import { CONFIG } from './config.js?v=202610311535';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons, checkOwner, saveOwner } from './data.js?v=202610311535';
+import { buildModel, optimalPoints } from './model.js?v=202610311535';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610311535';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -1474,14 +1474,14 @@ function openDynTeam(key) {
       <button type="button" class="close" data-close aria-label="Close">✕</button></div>
     <div class="line2" style="align-items:center;justify-content:flex-start;gap:12px"><span class="grade" style="background:${GRADE_COLORS[g]}">${g}</span>
       <span class="stack"><span style="font-size:14px">${ordinal(rank)} of ${C.teams_.length} · <span class="num ${sign(t.value)}">${signed(t.value, 0)}</span> vs. slot · ${t.hits} of ${t.picks.length} hit</span>
-      <span class="sub">${confidence(C)} · kept value ${f1(t.picks.reduce((s2, p) => s2 + p.keptValue, 0))} pts (${ordinal(C.teams_.slice().sort((x, y) => y.picks.reduce((s2, p) => s2 + p.keptValue, 0) - x.picks.reduce((s2, p) => s2 + p.keptValue, 0)).indexOf(t) + 1)} of ${C.teams_.length})</span></span></div>
+      <span class="sub">${confidence(C)} · kept value ${f1(t.picks.reduce((s2, p) => s2 + p.keptValue, 0))} (${ordinal(C.teams_.slice().sort((x, y) => y.picks.reduce((s2, p) => s2 + p.keptValue, 0) - x.picks.reduce((s2, p) => s2 + p.keptValue, 0)).indexOf(t) + 1)} of ${C.teams_.length})</span></span></div>
     <div class="scroll"><table class="table"><thead><tr><th>Pick</th><th style="text-align:left">Player</th>${yearHeads(C)}<th>Total</th><th>Best finish</th><th>For ${name(t.owner)}</th><th>Kept value</th><th>Expected</th><th>vs. slot</th><th>Grade</th><th>Hit</th></tr></thead><tbody>
     ${t.picks.slice().sort((x, y) => x.pick_no - y.pick_no).map(p => { const pg = gradeOf(p.z);
       return `<tr><td class="rk" style="width:auto">${pickLabel(C, p)}</td><td class="t">${player(p.player_id)} <span class="note">${esc(p.pos || '')}</span>${tradedTag(p)}</td>${yearCells(C, p)}
         <td>${f1(p.total)}</td><td style="color:#C9D3D2">${p.bestFinish ? esc(p.pos || '') + p.bestFinish : '—'}</td><td style="color:#C9D3D2">${f1(p.mgrPts)}</td>
-        <td title="${p.traded ? f1(p.mgrPts) + ' kept + ' + f1(p.traded.returnPts) + ' from the trade' : 'Never traded away'}">${f1(p.keptValue)}${p.traded ? '<span class="note"> incl. trade</span>' : ''}</td>
+        <td title="${p.traded ? f1(p.traded.beforeValue) + ' before the trade + ' + f1(p.traded.returnValue) + ' from the trade' : 'Never traded away: his Total'}">${f1(p.keptValue)}${p.traded ? '<span class="note"> incl. trade</span>' : ''}</td>
         <td style="color:#C9D3D2">${f1(p.expected)}</td><td class="${sign(p.value)}">${signed(p.value, 0)}</td><td><span class="grade sm" style="background:${GRADE_COLORS[pg]}">${pg}</span></td><td>${hitMark(p)}</td></tr>`; }).join('')}</tbody></table></div>
-    <p class="note" style="margin:0">Y1, Y2… = points above replacement each season since the draft. For ${name(t.owner)} = starter points he scored for this team. Kept value = those points plus, if he was traded away, this team's share of the starter points it got back in that trade (split evenly if several players went out). Expected = the Total that pick slot usually reaches after the same number of seasons; vs. slot = Total minus expected (misses count more early). The grade judges the pick itself; kept value shows what the team actually got out of it. Best finish = his best positional rank in any season.</p>
+    <p class="note" style="margin:0">Y1, Y2… = points above replacement each season since the draft. For ${name(t.owner)} = starter points he scored for this team. Kept value = what this team got out of the pick, on the same scale as Total: his Total if they kept him; if they traded him, his value before the trade plus this team's share of what came back, valued the way that trade is graded (four seasons; his share follows his part of what they sent). Expected = the Total that pick slot usually reaches after the same number of seasons; vs. slot = Total minus expected (misses count more early). The grade judges the pick itself; kept value shows what the team actually got out of it. Best finish = his best positional rank in any season.</p>
     <a class="btn" href="${mlink(t.owner)}" data-close>Open ${name(t.owner)}'s profile →</a>
   </div>`;
   if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
@@ -1525,7 +1525,7 @@ function openDynInfo() {
     <p>The <b>Scout grade</b> (0–100) rates each manager's rookie drafting: value per pick vs. slot 60%, hit rate 25%, elite rate 15%, each scaled so 50 is the league average. Picks count 40% in year 1, 70% in year 2 and fully after that, and managers with few picks are pulled toward 50. It keeps updating as classes develop. It's separate from the Manager Score, which leaves the draft out in dynasty.</p>
     <p><b>Scout of the Year</b> (replaces Steal of the Draft in dynasty) goes to the manager whose rookie picks in their first three seasons produced the most that season: points above replacement, elite seasons multiplied. It only uses that season's results, so once a season ends its winner never changes.</p>
     <h3>Traded players</h3>
-    <p>A pick's grade follows the <b>player</b>, wherever he ends up: if you trade a rookie and he breaks out elsewhere, your pick still grades well, because you picked the right player. Selling him early shows up in that <b>trade's</b> grade instead, so it isn't counted twice. A <b>Traded</b> tag marks those players (tap it for the trade), and <b>Kept value</b> in a team's pop-up shows what the drafter actually got: his starter points for them plus their share of what came back in the trade.</p>
+    <p>A pick's grade follows the <b>player</b>, wherever he ends up: if you trade a rookie and he breaks out elsewhere, your pick still grades well, because you picked the right player. Selling him early shows up in that <b>trade's</b> grade instead, so it isn't counted twice. A <b>Traded</b> tag marks those players (tap it for the trade), and <b>Kept value</b> in a team's pop-up shows what the drafter actually got, on the same scale: his value while they had him plus their share of what came back, valued the way the trade is graded.</p>
     <h3>Other numbers</h3>
     <p><b>For [manager]</b> in a team's pop-up = starter points that player scored for the team that drafted him. <b>Best finish</b> = his best positional rank in any season. <b>Career rookie drafting</b> adds up every rookie draft (not startup or supplemental drafts).</p>
   </div>`;

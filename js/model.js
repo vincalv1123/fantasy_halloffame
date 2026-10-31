@@ -1,7 +1,7 @@
 // Turns raw Sleeper data into every stat, award and score the site shows.
 // Pure functions only: nothing here touches the page or the network.
 
-import { CONFIG } from './config.js?v=202610311525';
+import { CONFIG } from './config.js?v=202610311535';
 
 const ELIGIBLE = {
   QB: ['QB'], RB: ['RB'], WR: ['WR'], TE: ['TE'], K: ['K'], DEF: ['DEF'],
@@ -816,20 +816,28 @@ export function dynastyDrafts(seasons) {
         hit: hitYears.length > 0, hitYears, mgrPts: years.reduce((t, Sy) => t + starterPtsFor(Sy, owner, p.player_id), 0),
         bestFinish: years.map(Sy => Sy.posRank[p.player_id]).filter(Boolean).sort((a, b) => a - b)[0] || null };
     });
-    // Was the player later traded away by the manager who drafted him? Kept value = his starter points for the
-    // drafter, plus that manager's share of what came back in the trade (the trade's own starter-point count).
+    // Was the player later traded away by the manager who drafted him? Kept value is measured like the trade grades:
+    // his value (Total) if the drafter kept him; if not, his value in the seasons before the trade (the trade season
+    // by the share of its regular-season weeks played first) plus the drafter's share of what came back, valued the way
+    // that trade was graded. His share follows his part of what the drafter sent, so a throw-in gets little credit.
     picks.forEach(p => {
       for (const Sy of years) {
         const t = (Sy.trades || []).slice().sort((a, b) => a.created - b.created).find(tr => tr.sides.some(sd => Sy.ownerOf[sd.rid] === p.owner && sd.sent.some(g => g.pid === p.player_id)));
         if (!t) continue;
         const mine = t.sides.find(sd => Sy.ownerOf[sd.rid] === p.owner);
         const to = t.sides.find(sd => sd.got.some(g => g.pid === p.player_id));
-        const share = mine.sent.length ? 1 / mine.sent.length : 1;
+        const me = mine.sent.find(g => g.pid === p.player_id);
+        const share = mine.valueOut > 0 && me && me.value != null ? me.value / mine.valueOut : (mine.sent.length ? 1 / mine.sent.length : 1);
+        // Seasons with the drafter: full seasons before the trade, plus the part of the trade season before it.
+        const k = years.indexOf(Sy);
+        const reg = Math.max(1, (Sy.playoffWeekStart || 15) - 1);
+        const before = p.byYear.slice(0, k).concat([(p.byYear[k] || 0) * Math.min(1, Math.max(0, (t.week - 1) / reg))]);
         p.traded = { season: Sy.season, week: t.week, trade: t, toOwner: to ? Sy.ownerOf[to.rid] : null,
-          returnPts: mine.got.reduce((s2, g) => s2 + g.pts, 0) * share, gotNames: mine.got.map(g => g.pid), picksBack: (mine.picks || []).length };
+          beforeValue: careerValue(before), returnValue: (mine.valueIn || 0) * share,
+          gotNames: mine.got.map(g => g.pid), picksBack: (mine.picks || []).length };
         break;
       }
-      p.keptValue = p.mgrPts + (p.traded ? p.traded.returnPts : 0);
+      p.keptValue = p.traded ? p.traded.beforeValue + p.traded.returnValue : p.total;
     });
     classes.push({ season: S.season, S, kind: dr.kind, draftId: dr.draftId, rounds: dr.rounds, teams: n, years: years.length, graded: dr.kind !== 'supplemental', picks });
   }));
