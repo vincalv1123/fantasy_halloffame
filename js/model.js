@@ -1,7 +1,7 @@
 // Turns raw Sleeper data into every stat, award and score the site shows.
 // Pure functions only: nothing here touches the page or the network.
 
-import { CONFIG } from './config.js?v=202610302340';
+import { CONFIG } from './config.js?v=202610310050';
 
 const ELIGIBLE = {
   QB: ['QB'], RB: ['RB'], WR: ['WR'], TE: ['TE'], K: ['K'], DEF: ['DEF'],
@@ -285,7 +285,8 @@ function buildSeason(raw, players, isNewest, later, format, opts) {
   // in that slot is expected to give. Values are set below, once the replacement levels are known.
   // Dynasty: starter points each incoming player scored for his new team (later seasons included), minus the same
   // for players sent away.
-  const valueMode = format !== 'dynasty';
+  // Dynasty trades use the multi-season values from dynastyTradeValues (final pass only).
+  const valueMode = format !== 'dynasty' || !!opts.dynTrade;
   const tradeNet = {};
   rids.forEach(r => { tradeNet[r] = { net: 0, count: 0 }; });
   const trades = [];
@@ -302,7 +303,7 @@ function buildSeason(raw, players, isNewest, later, format, opts) {
       if (sides[from]) { sides[from].sent.push(g); if (!valueMode) sides[from].net -= r.pts; }
     });
     (t.picks || []).forEach(d => { if (sides[d.to]) (sides[d.to].picks = sides[d.to].picks || []).push(d); });
-    trades.push({ season: raw.season, week: t.leg, created: t.created, sides: Object.values(sides), picks: t.picks || [], valueMode,
+    trades.push({ season: raw.season, week: t.leg, created: t.created, sides: Object.values(sides), picks: t.picks || [], valueMode, dyn: format === 'dynasty',
       draftDay: !Object.keys(t.adds || {}).length && (t.picks || []).length > 0 });
   });
   trades.sort((a, b) => a.created - b.created);
@@ -370,12 +371,20 @@ function buildSeason(raw, players, isNewest, later, format, opts) {
   };
   trades.forEach(t => {
     if (!t.valueMode) { t.sides.forEach(sd => { const T = tradeNet[sd.rid]; if (T) { T.net += sd.net; T.count++; } }); return; }
-    const done = new Set();
-    t.sides.forEach(sd => sd.got.forEach(g => { if (done.has(g)) return; done.add(g); Object.assign(g, restValue(g.pid, t.week)); }));
-    t.picks.forEach(dp => {
-      const v = opts.pickValue ? opts.pickValue(dp) : null;
-      dp.value = v ? v.value : null; dp.estimate = v ? v.estimate : false; dp.pickNo = v ? v.pickNo : null;
-    });
+    if (t.dyn) {
+      // Dynasty: each player's discounted value over the trade season and the next three; each pick at its fixed
+      // slot (or round) value.
+      t.sides.forEach(sd => sd.got.forEach(g => Object.assign(g, opts.dynTrade.player(raw.season, t.week, g.pid))));
+      t.picks.forEach(dp => { const v = opts.dynTrade.pick(dp); dp.value = v ? v.value : null; dp.estimate = v ? v.estimate : false; dp.pickNo = v ? v.pickNo : null; dp.slotLabel = v ? v.slotLabel : null; });
+      t.yearsIn = opts.dynTrade.yearsIn(raw.season); t.windowDone = opts.dynTrade.windowDone(raw.season);
+    } else {
+      const done = new Set();
+      t.sides.forEach(sd => sd.got.forEach(g => { if (done.has(g)) return; done.add(g); Object.assign(g, restValue(g.pid, t.week)); }));
+      t.picks.forEach(dp => {
+        const v = opts.pickValue ? opts.pickValue(dp) : null;
+        dp.value = v ? v.value : null; dp.estimate = v ? v.estimate : false; dp.pickNo = v ? v.pickNo : null;
+      });
+    }
     t.sides.forEach(sd => {
       const pickIn = t.picks.filter(d => d.to === sd.rid).reduce((x, d) => x + (d.value || 0), 0);
       const pickOut = t.picks.filter(d => d.from === sd.rid).reduce((x, d) => x + (d.value || 0), 0);
@@ -684,6 +693,88 @@ function draftCurves(seasons) {
 // since he was drafted (never below 0 in a season: sitting on a bench costs nothing). That running total is
 // compared with what picks near the same slot produced after the same number of seasons in earlier drafts
 // of the same kind; with too little history, with the picks around it in the same draft instead.
+// ---------- Dynasty trades ----------
+// A traded player is worth his value over the trade season (weeks after the trade) and the next three seasons, the
+// same per-season value the rookie-draft grades use (points above a replacement-level starter at his position, never
+// below 0, with elite seasons multiplied), each later season counting less (100% / 85% / 70% / 55%), judged in a
+// vacuum: it doesn't matter which team he was on. A traded rookie pick keeps one fixed value: what a pick in that slot
+// is expected to give over the same window, judged from this league's rookie drafts, or the round's average while the
+// draft order isn't known.
+function dynastyTradeValues(pre) {
+  const D = CONFIG.dynTrade || {};
+  const N = D.seasons || 4; const decay = D.decay != null ? D.decay : 0.15;
+  const wt = i => Math.max(0, 1 - decay * i);
+  const wsum = n => { let t = 0; for (let i = 0; i < n; i++) t += wt(i); return t; };
+  const by = {}; pre.forEach(S => { by[S.season] = S; });
+  const newest = pre.length ? Number(pre[0].season) : 0;
+  const tiers = (S, pos) => { const r = S.replacement[pos]; const n = S.rids.length; const tight = !r || (r.rank - 1) <= n * 1.3;
+    return (tight ? [2, 4, 8] : [3, 6, 12]).map(x => Math.max(1, Math.round(x * n / 12))); };
+  const mult = (S, pid) => { const k = S.posRank[pid]; if (!k) return 1; const t = tiers(S, S.posOf(pid)); return k <= t[0] ? 2 : k <= t[1] ? 1.6 : k <= t[2] ? 1.3 : 1; };
+  const restPor = (S, pid, fromWeek) => {
+    let pts = 0; let gp = 0;
+    S.regWeeks.forEach(w => { if (w < fromWeek) return; let x = null; Object.values(S.byWeek[w] || {}).forEach(m => { if (m.players_points && m.players_points[pid] != null) x = m.players_points[pid]; }); if (x != null && x > 0) { pts += x; gp++; } });
+    return Math.max(0, pts - gp * S.replPpg(S.posOf(pid)));
+  };
+  const player = (season, week, pid) => {
+    const Y = Number(season);
+    let value = 0; let seasons = 0; const years = [];
+    for (let i = 0; i < N; i++) {
+      const S = by[String(Y + i)]; if (!S) break;
+      const base = (i === 0 ? restPor(S, pid, week) : Math.max(0, S.aboveRepl(pid))) * mult(S, pid) * (S.kdw ? S.kdw(S.posOf(pid)) : 1);
+      const v = base * wt(i);
+      years.push({ season: S.season, value: v, base, partial: S.isCurrent });
+      value += v; seasons++;
+    }
+    let pts = 0; years.forEach(y => { pts += y.base; });
+    return { value, seasons, years, games: null };
+  };
+  // Expected 4-season value by overall rookie pick, from finished seasons of this league's rookie drafts.
+  const classes = dynastyDrafts(pre).filter(C => C.kind === 'rookie' && C.graded && C.picks.length);
+  const teams = pre.length ? pre[0].rids.length : 12;
+  const pool = [];
+  classes.forEach(C => {
+    const done = C.years - (C.S && Number(C.season) + C.years - 1 === newest && pre[0].isCurrent ? 1 : 0);
+    const n = Math.min(N, done);
+    if (n < 1) return;
+    C.picks.forEach(p => { let t = 0; for (let i = 0; i < n; i++) t += wt(i) * (p.byYear[i] || 0); pool.push({ at: p.pick_no, v: t * wsum(N) / wsum(n) }); });
+  });
+  const used = new Set(classes.map(C => C.season)).size;
+  const maxPick = Math.max(teams * 3, ...classes.map(C => C.picks.length));
+  // Starting chart, used until the league has its own rookie history and blended out as that history builds up
+  // (2 finished classes = 40% the league's own, 4 = 57%, 8 = 73%). It comes from real NFL rookies (2017-2025) in a
+  // simulated 12-team superflex PPR league: the 4-season value of each overall pick, averaged over five leagues.
+  const PRIOR = [184, 177, 170, 163, 156, 149, 142, 134, 125, 116, 107, 99, 92, 85, 79, 74, 68, 63, 59, 57, 54, 51, 47, 44,
+    41, 38, 35, 33, 31, 29, 27, 25, 23, 22, 22, 21];
+  const prior = k => { const x = (k - 1) * 12 / teams + 1; if (x <= PRIOR.length) { const i = Math.floor(x); const f = x - i;
+    return i >= PRIOR.length ? PRIOR[PRIOR.length - 1] : PRIOR[i - 1] * (1 - f) + PRIOR[i] * f; }
+    return PRIOR[PRIOR.length - 1] * Math.exp(-(x - PRIOR.length) / 12); };
+  const win = Math.max(3, Math.round(teams * 0.75));
+  const trust = used / (used + 3);
+  const vals = [];
+  for (let k = 1; k <= maxPick; k++) {
+    let ws = 0; let t = 0;
+    pool.forEach(q => { const d = Math.abs(q.at - k); if (d <= win) { const w = 1 - d / (win + 1); ws += w; t += w * q.v; } });
+    vals.push(ws ? trust * (t / ws) + (1 - trust) * prior(k) : prior(k));
+  }
+  const smooth = nonIncreasing(vals);
+  const curve = k => Math.max(0, k <= smooth.length ? smooth[Math.max(1, k) - 1] : prior(k));
+  const roundAvg = rd => { let t = 0; for (let s = 1; s <= teams; s++) t += curve((rd - 1) * teams + s); return t / teams; };
+  const pick = dp => {
+    const S = by[String(dp.season)];
+    const dr = S && (S.drafts || []).find(x => x.kind === 'rookie' && (x.picks || []).length);
+    if (dr && dr.slotToRoster) {
+      const slot = Object.keys(dr.slotToRoster).find(k => String(dr.slotToRoster[k]) === String(dp.orig));
+      const p = slot != null ? dr.picks.find(q => q.round === dp.round && String(q.draft_slot) === String(slot)) : null;
+      if (p) return { value: curve(p.pick_no), estimate: false, pickNo: p.pick_no, slotLabel: dp.round + '.' + String(Number(slot)).padStart(2, '0') };
+    }
+    return { value: roundAvg(dp.round), estimate: true, pickNo: null, slotLabel: null };
+  };
+  const yearsIn = season => Math.min(N, newest - Number(season) + 1);
+  // The window is complete once its last season is finished.
+  const windowDone = season => newest - Number(season) + 1 > N || (newest - Number(season) + 1 === N && !(pre[0] && pre[0].isCurrent));
+  return { player, pick, yearsIn, windowDone, N };
+}
+
 export function dynastyDrafts(seasons) {
   const bySeason = {}; seasons.forEach(S => { bySeason[S.season] = S; });
   const newest = seasons.length ? Number(seasons[0].season) : 0;
@@ -825,7 +916,9 @@ export function buildModel(data, format) {
   // Redraft trades with draft picks need each pick's expected value, which needs the slot curves: one more pass.
   const hasPickTrades = (format || 'redraft') !== 'dynasty' && data.seasons.some(raw => (raw.transactions || []).some(t => t.type === 'trade' && (t.picks || []).length));
   const pickValue = hasPickTrades ? pickValues(build({ skipOdds: true, curves }), data.seasons) : null;
-  const seasons = build({ curves, pickValue });
+  // Dynasty trades: values over several seasons need every season built first (one quick pass without odds).
+  const dynTrade = (format || 'redraft') === 'dynasty' ? dynastyTradeValues(build({ skipOdds: true, curves })) : null;
+  const seasons = build({ curves, pickValue, dynTrade });
   const managers = {};
   data.seasons.forEach(raw => {
     raw.rosters.forEach(r => {
