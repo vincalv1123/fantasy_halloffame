@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610311450';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons, checkOwner, saveOwner } from './data.js?v=202610311450';
-import { buildModel, optimalPoints } from './model.js?v=202610311450';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610311450';
+import { CONFIG } from './config.js?v=202610311505';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons, checkOwner, saveOwner } from './data.js?v=202610311505';
+import { buildModel, optimalPoints } from './model.js?v=202610311505';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610311505';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -83,6 +83,13 @@ document.addEventListener('click', e => {
 });
 
 const cellNum = (txt, color) => `<td${color ? ` style="color:${color}"` : ''}>${txt}</td>`;
+// Managers with a team in the newest season get a green dot in the all-time tables.
+function nowDot(id) {
+  const S = M.seasons[0];
+  const inNow = S && S.rids.some(r => S.ownerOf[r] === id);
+  return inNow ? '<span class="dot" title="In the league this season" style="display:inline-block;margin-right:7px;vertical-align:middle"></span>' : '<span style="display:inline-block;width:13px"></span>';
+}
+const NOW_NOTE = '<span class="dot" style="display:inline-block;vertical-align:middle;margin-right:4px"></span> = in the league this season. ';
 function standingsColumns(extra) {
   return [
     { key: 'pos', label: '#', cell: (r, i) => `<td class="rk">${i + 1}</td>` },
@@ -217,12 +224,12 @@ function viewAll() {
   }
 
   const lb = M.leaderboard;
-  const atRows = lb.map(c => ({ name: name(c.id), href: mlink(c.id), wl: wl(c.wins, c.losses, c.ties),
+  const atRows = lb.map(c => ({ name: nowDot(c.id) + name(c.id), href: mlink(c.id), wl: wl(c.wins, c.losses, c.ties),
     tag: c.titles ? ` <span class="note gold-t">${'★'.repeat(Math.min(c.titles, 5))}</span>` : '',
     v: { wins: c.winPct, pf: c.pf, pa: c.pa, maxPf: c.maxPf, ap: c.allPlayPct, seasons: c.bySeason.length, titles: c.titles, tie: c.pf } }));
   out.push(section(`<div class="head"><h2>All-time standings</h2><span class="note">Regular season · tap a column to sort</span></div>
     ${sortTable(standingsColumns([{ key: 'seasons', label: 'Yrs', sortable: true, cell: r => cellNum(String(r.v.seasons), '#8A9C9F') }]).concat([{ key: 'titles', label: 'Titles', sortable: true, cell: r => cellNum(String(r.v.titles)) }]), atRows, { key: 'wins' })}
-    <span class="note">W–L sorts by win %. ★ = titles.</span>`));
+    <span class="note">${NOW_NOTE}W–L sorts by win %. ★ = titles.</span>`));
   out.push(section(`<div class="head"><h2>Manager Score</h2><span class="note">Career · 0–100 · 50 is average</span></div>
     <div class="rows">${lb.map((c, i) => {
       const best = i === 0; const worst = i === lb.length - 1 && lb.length > 1;
@@ -1097,7 +1104,7 @@ function viewPlayoffs() {
     }));
   });
   Object.values(P).forEach(x => { const c = M.career[x.id]; x.regPpg = c ? c.ppg : 0; });
-  const rows = Object.values(P).map(x => ({ name: name(x.id), href: mlink(x.id), wl: wl(x.w, x.l),
+  const rows = Object.values(P).map(x => ({ name: nowDot(x.id) + name(x.id), href: mlink(x.id), wl: wl(x.w, x.l),
     tag: x.titles ? ` <span class="note gold-t">${'★'.repeat(Math.min(x.titles, 5))}</span>` : '',
     v: { apps: x.apps, byes: x.byes, wins: x.games ? x.w / x.games + x.w / 1000 : 0, titles: x.titles, finals: x.finals,
       ppg: x.games ? x.pts / x.games : 0, clutch: x.games && x.regPpg ? (x.pts / x.games / x.regPpg - 1) * 100 : 0, tie: x.apps } }));
@@ -1114,7 +1121,7 @@ function viewPlayoffs() {
   ];
   out.push(section(`<div class="head"><h2>Playoff standings</h2><span class="note">Finished seasons · tap a column to sort</span></div>
     ${rows.length ? sortTable(cols, rows, { key: 'titles' }) : '<p class="lead">No finished playoffs yet.</p>'}
-    <span class="note">Apps = playoff appearances. Byes = first-round byes. W–L and PPG count championship-bracket games only (no 3rd-place or consolation games). Clutch = playoff PPG vs. regular-season PPG.</span>`));
+    <span class="note">${NOW_NOTE}Apps = playoff appearances. Byes = first-round byes. W–L and PPG count championship-bracket games only (no 3rd-place or consolation games). Clutch = playoff PPG vs. regular-season PPG.</span>`));
 
   // Playoff records.
   const all = [];
