@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610311505';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons, checkOwner, saveOwner } from './data.js?v=202610311505';
-import { buildModel, optimalPoints } from './model.js?v=202610311505';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610311505';
+import { CONFIG } from './config.js?v=202610311515';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons, checkOwner, saveOwner } from './data.js?v=202610311515';
+import { buildModel, optimalPoints } from './model.js?v=202610311515';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610311515';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -534,14 +534,14 @@ function seasonAwards(S) {
   }
   let toy = null;
   S.trades.forEach(t => t.sides.forEach(x => { if (!toy || x.net > toy.s.net) toy = { t, s: x }; }));
-  if (toy && toy.s.net > 0) aw.push({ key: 'trade', k: 'Trade of the Year', rid: toy.s.rid, v: signed(toy.s.net), d: tradeWhen(toy.t) + ' · got ' + (toy.s.got.map(g => player(g.pid)).join(', ') || 'picks'), cls: 'gold-t', good: true });
+  if (toy && toy.s.net > 0) aw.push({ key: 'trade', k: 'Trade of the Year', rid: toy.s.rid, open: tradeAttr(toy.t), v: signed(toy.s.net), d: tradeWhen(toy.t) + ' · got ' + (toy.s.got.map(g => player(g.pid)).join(', ') || 'picks'), cls: 'gold-t', good: true });
   // Fleeced: the other end of a lopsided trade, the side that lost the most value in a single trade.
   let flc = null;
   S.trades.forEach(t => t.sides.forEach(x => { if (!flc || x.net < flc.s.net) flc = { t, s: x }; }));
   if (flc && flc.s.net < 0) {
     const gave = flc.s.sent.map(g => player(g.pid)).concat(flc.t.picks.filter(d => d.from === flc.s.rid).map(d => 'R' + d.round + ' pick'));
     const to = flc.t.sides.filter(x => x !== flc.s).map(x => name(S.ownerOf[x.rid])).join(' & ');
-    aw.push({ key: 'fleeced', k: 'Fleeced', rid: flc.s.rid, v: signed(flc.s.net), d: tradeWhen(flc.t) + ' · gave ' + (gave.join(', ') || 'picks') + ' to ' + to, cls: 'bad-t', good: false });
+    aw.push({ key: 'fleeced', k: 'Fleeced', rid: flc.s.rid, open: tradeAttr(flc.t), v: signed(flc.s.net), d: tradeWhen(flc.t) + ' · gave ' + (gave.join(', ') || 'picks') + ' to ' + to, cls: 'bad-t', good: false });
   }
   // Dynasty: Scout of the Year replaces Steal of the Draft. It adds up what each manager's rookie-draft picks
   // produced that season (players in their first 3 seasons), so a finished season's winner never changes.
@@ -557,10 +557,10 @@ function seasonAwards(S) {
       aw.push({ key: 'scout', k: 'Scout of the Year', rid, v: '+' + Math.round(t.v), d: 'Pts above replacement from ' + t.n + ' young rookie pick' + (t.n === 1 ? '' : 's') + (t.best && t.best.v > 0 ? ' · best: ' + player(t.best.p.player_id) : ''), cls: 'gold-t', good: true });
     }
   }
-  if (S.steal && LG.format !== 'dynasty') aw.push({ key: 'steal', k: 'Steal of the Draft', rid: S.steal.roster_id, v: 'R' + S.steal.round + ' → ' + esc(S.steal.pos) + S.posRank[S.steal.player_id], d: player(S.steal.player_id) + ', round ' + S.steal.round + ', finished ' + esc(S.steal.pos) + S.posRank[S.steal.player_id] + (S.isCurrent ? ' so far' : ''), cls: 'gold-t', good: true });
-  if (S.bust) aw.push({ key: 'bust', k: 'Bust of the Draft', rid: S.bust.roster_id, v: 'R' + S.bust.round + ' → ' + esc(S.bust.pos) + (S.posRank[S.bust.player_id] || '—'), d: player(S.bust.player_id) + ', round ' + S.bust.round + (S.posRank[S.bust.player_id] ? ', finished ' + esc(S.bust.pos) + S.posRank[S.bust.player_id] : ', barely played') + (S.isCurrent ? ' so far' : ''), cls: 'bad-t', good: false });
+  if (S.steal && LG.format !== 'dynasty') aw.push({ key: 'steal', k: 'Steal of the Draft', rid: S.steal.roster_id, open: ` data-draft-team="${S.season}:${S.steal.roster_id}"`, v: 'R' + S.steal.round + ' → ' + esc(S.steal.pos) + S.posRank[S.steal.player_id], d: player(S.steal.player_id) + ', round ' + S.steal.round + ', finished ' + esc(S.steal.pos) + S.posRank[S.steal.player_id] + (S.isCurrent ? ' so far' : ''), cls: 'gold-t', good: true });
+  if (S.bust) aw.push({ key: 'bust', k: 'Bust of the Draft', rid: S.bust.roster_id, open: ` data-draft-team="${S.season}:${S.bust.roster_id}"`, v: 'R' + S.bust.round + ' → ' + esc(S.bust.pos) + (S.posRank[S.bust.player_id] || '—'), d: player(S.bust.player_id) + ', round ' + S.bust.round + (S.posRank[S.bust.player_id] ? ', finished ' + esc(S.bust.pos) + S.posRank[S.bust.player_id] : ', barely played') + (S.isCurrent ? ' so far' : ''), cls: 'bad-t', good: false });
   const hi = S.weeklyHighs[0];
-  if (hi) aw.push({ key: 'highScore', k: 'Highest score', rid: hi.rid, v: f2(hi.pts), d: 'Week ' + hi.week, cls: 'gold-t', good: true });
+  if (hi) aw.push({ key: 'highScore', k: 'Highest score', rid: hi.rid, open: (k => (k ? ` data-matchup="${k}"` : ''))(gameKey(S, hi.week, hi.rid)), v: f2(hi.pts), d: 'Week ' + hi.week, cls: 'gold-t', good: true });
   const byLuck = S.standings.slice().sort((a, b) => b.luck - a.luck);
   if (byLuck.length > 1) {
     aw.push({ key: 'luckiest', k: 'Luckiest', rid: byLuck[0].rid, v: signed(byLuck[0].luck), d: 'Wins above expected', cls: 'up', good: true });
@@ -568,7 +568,7 @@ function seasonAwards(S) {
   }
   if (S.benchBlunder && S.benchBlunder.gap > 0) {
     const b = S.benchBlunder;
-    aw.push({ key: 'blunder', k: 'Bench Blunder', rid: b.rid, v: f1(b.gap) + ' pts', d: 'Week ' + b.week + ' points left on the bench' + (b.wouldHaveWon ? ' · would have won' : b.lostBy != null ? ' · lost by ' + f1(b.lostBy) : ''), cls: 'bad-t', good: false });
+    aw.push({ key: 'blunder', k: 'Bench Blunder', rid: b.rid, open: (k => (k ? ` data-matchup="${k}"` : ''))(gameKey(S, b.week, b.rid)), v: f1(b.gap) + ' pts', d: 'Week ' + b.week + ' points left on the bench' + (b.wouldHaveWon ? ' · would have won' : b.lostBy != null ? ' · lost by ' + f1(b.lostBy) : ''), cls: 'bad-t', good: false });
   }
   const lastR = S.lastPlace != null ? S.st[S.lastPlace] : S.standings[S.standings.length - 1];
   aw.push({ key: 'sacko', k: S.isCurrent ? 'Sacko watch' : 'Sacko', rid: lastR.rid, v: wl(lastR.wins, lastR.losses, lastR.ties),
@@ -1788,9 +1788,13 @@ function viewAwards() {
     const entries = bySeason.map(({ S, list }) => ({ S, a: list.find(x => x.key === key) })).filter(x => x.a);
     const tier = key === 'sacko' ? 'sacko' : entries[0].a.major ? 'major' : entries[0].a.good ? 'good' : 'bad';
     return `<details class="calc aw-${tier}"${key === 'champion' || key === 'sacko' ? ' open' : ''}><summary><span style="display:flex;align-items:center;gap:8px"><span class="dot"></span>${esc(seen[key])}</span></summary>
-      <div class="calc-body" style="padding-top:4px">${awardDesc(key) ? `<p class="award-desc">${awardDesc(key)}</p>` : ''}<div class="rows">${entries.map(({ S, a }) => `<a class="row" href="${mlink(S.ownerOf[a.rid])}@${S.season}" style="grid-template-columns:52px minmax(0,1fr) auto">
-        <span class="year">${S.season}</span><span class="stack"><span class="name" style="font-size:14px">${name(S.ownerOf[a.rid])}${S.isCurrent ? ' <span class="note">so far</span>' : ''}</span><span class="sub">${a.d}</span></span>
-        <span class="num" style="font-size:14px">${a.v}</span></a>`).join('')}</div></div></details>`;
+      <div class="calc-body" style="padding-top:4px">${awardDesc(key) ? `<p class="award-desc">${awardDesc(key)}</p>` : ''}<div class="rows">${entries.map(({ S, a }) => {
+        // Trades, drafts and games open their popup; the other awards go to the manager's season.
+        const inner = `<span class="year">${S.season}</span><span class="stack"><span class="name" style="font-size:14px">${name(S.ownerOf[a.rid])}${S.isCurrent ? ' <span class="note">so far</span>' : ''}</span><span class="sub">${a.d}</span></span>
+        <span class="num" style="font-size:14px">${a.v}</span>`;
+        return a.open ? `<button type="button" class="row rowbtn"${a.open} style="grid-template-columns:52px minmax(0,1fr) auto;text-align:left;width:100%">${inner}</button>`
+          : `<a class="row" href="${mlink(S.ownerOf[a.rid])}@${S.season}" style="grid-template-columns:52px minmax(0,1fr) auto">${inner}</a>`;
+      }).join('')}</div></div></details>`;
   };
   const isMajor = k => bySeason.some(({ list }) => list.some(x => x.key === k && x.major));
   const keys = AWARD_ORDER.filter(k => seen[k]);
