@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202610311600';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons, checkOwner, saveOwner } from './data.js?v=202610311600';
-import { buildModel, optimalPoints } from './model.js?v=202610311600';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610311600';
+import { CONFIG } from './config.js?v=202610312110';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons, checkOwner, saveOwner } from './data.js?v=202610312110';
+import { buildModel, optimalPoints } from './model.js?v=202610312110';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202610312110';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -328,10 +328,10 @@ function viewAll() {
     (x, n) => rrow(n, tradeAttr(x.t), `${name(x.sd.owner)} over ${others(x)}`, `${x.t.season} · ${tradeWhen(x.t)} · got ${x.sd.got.map(g => player(g.pid)).join(', ') || 'picks'}`, gradeTag(x.sd.grade) + signed(x.sd.net), 'up'));
   const pickRow = cls => (x, n) => rrow(n, `data-draft-team="${x.S.season}:${x.p.roster_id}"`, `${player(x.p.player_id)} <span class="note">${esc(x.p.pos)}</span>`,
     `${name(x.S.ownerOf[x.p.roster_id])} · ${x.S.season} · pick ${x.p.pick_no} · finished ${esc(x.p.pos)}${x.S.posRank[x.p.player_id] || '—'} · ${f1(x.p.pts)} pts`, signed(x.p.value, 0) + ' vs. slot', cls);
-  rankCard('steal', 'Best steal of the draft', 'up', steals,
+  if (LG.format !== 'dynasty') rankCard('steal', 'Best steal of the draft', 'up', steals,
     x => `<div class="line2"><span style="font-weight:600">${player(x.p.player_id)} <span class="note">${esc(x.p.pos)}</span></span><span class="num up">R${x.p.round} → ${esc(x.p.pos)}${x.S.posRank[x.p.player_id]}</span></div>
       <span class="note">${name(x.S.ownerOf[x.p.roster_id])} · ${x.S.season} · pick ${x.p.pick_no} · ${f1(x.p.pts)} pts</span>`, pickRow('up'));
-  rankCard('bust', 'Worst bust of the draft', 'down', busts,
+  if (LG.format !== 'dynasty') rankCard('bust', 'Worst bust of the draft', 'down', busts,
     x => `<div class="line2"><span style="font-weight:600">${player(x.p.player_id)} <span class="note">${esc(x.p.pos)}</span></span><span class="num down">R${x.p.round} → ${esc(x.p.pos)}${x.S.posRank[x.p.player_id] || '—'}</span></div>
       <span class="note">${name(x.S.ownerOf[x.p.roster_id])} · ${x.S.season} · pick ${x.p.pick_no} · ${f1(x.p.pts)} pts</span>`, pickRow('down'));
   const blunderNote = b => (b.wouldHaveWon ? ' · would have won' : b.lostBy != null ? ' · lost by ' + f1(b.lostBy) : '');
@@ -341,8 +341,8 @@ function viewAll() {
     (x, n) => { const key = gameKey(x.S, x.b.week, x.b.rid);
       return rrow(n, key ? `data-matchup="${key}"` : '', name(x.S.ownerOf[x.b.rid]), `${x.S.season} · Week ${x.b.week} · left on the bench${blunderNote(x.b)}`, f1(x.b.gap) + ' pts', 'down'); });
 
-  // Career: waivers, trades and draft value (redraft). One card each with the best and worst; it drops down to every manager.
-  if (LG.format !== 'dynasty' && done2.length) {
+  // Career: waivers, trades and draft value. One card each with the best and worst; it drops down to every manager.
+  if (done2.length) {
     const a = allTimeTotals();
     const career = (title, k, ok, fmt, detail) => {
       const list = a.list.filter(ok || (() => true)).sort((p, q) => q[k] - p[k]);
@@ -1752,9 +1752,22 @@ function allTimeTotals() {
     const x = t[id] = t[id] || { id, waiver: 0, adds: 0, trade: 0, trades: 0, draft: 0, drafts: 0, picks: 0 };
     x.waiver += S.waivers[r].pts; x.adds += S.waivers[r].adds;
     x.trade += S.tradeNet[r].net; x.trades += S.tradeNet[r].count;
+    if (LG.format === 'dynasty') return; // dynasty draft value comes from the dynasty draft grades below
     const mine = S.picks.filter(p => p.roster_id === r);
     if (mine.length) { x.draft += S.draftValue[r] || 0; x.drafts++; x.picks += mine.length; }
   }));
+  // Dynasty: value vs. slot from every graded draft (rookie drafts and the startup) held in a finished season.
+  if (LG.format === 'dynasty' && M.dynDrafts) {
+    const done = new Set(completed().map(S => S.season));
+    M.dynDrafts.filter(C => C.graded && done.has(C.season)).forEach(C => {
+      const seen = new Set();
+      C.picks.forEach(p => {
+        const x = t[p.owner] = t[p.owner] || { id: p.owner, waiver: 0, adds: 0, trade: 0, trades: 0, draft: 0, drafts: 0, picks: 0 };
+        x.draft += p.value; x.picks++;
+        if (!seen.has(p.owner)) { seen.add(p.owner); x.drafts++; }
+      });
+    });
+  }
   const list = Object.values(t);
   const pick = (k, dir, ok) => list.filter(ok || (() => true)).sort((a, b) => dir * (b[k] - a[k]))[0] || null;
   const hasTrades = x => x.trades > 0; const hasDrafts = x => x.drafts > 0;
