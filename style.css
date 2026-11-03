@@ -421,3 +421,10 @@ button.tile.tbtn:hover, button.tile.tbtn:focus-visible { background: var(--panel
 .move-career { display: flex; flex-direction: column; gap: 2px; padding-bottom: 8px; border-bottom: 1px solid var(--line, #22363B); }
 .move-panel .row .sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 4px; }
 @media (max-width: 760px) { .move-trio, .move-trio.two { grid-template-columns: 1fr; } }
+
+/* Player names open the player's page. */
+.plink { cursor: pointer; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 2px; transition: text-decoration-color .15s; }
+.plink:hover { text-decoration-color: currentColor; }
+/* Weekly recap highlight cards. */
+.recap-cards { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+.recap-cards .card:hover { outline: 1px solid var(--line-strong); }
