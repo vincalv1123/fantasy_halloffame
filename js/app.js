@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202611022310';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons, checkOwner, saveOwner } from './data.js?v=202611022310';
-import { buildModel, optimalPoints } from './model.js?v=202611022310';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202611022310';
+import { CONFIG } from './config.js?v=202611022320';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons, checkOwner, saveOwner } from './data.js?v=202611022320';
+import { buildModel, optimalPoints } from './model.js?v=202611022320';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202611022320';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -2015,8 +2015,8 @@ function viewRecap(seasonSel, weekSel) {
   // Scoreboard.
   out.push(section(`<h2>Scoreboard</h2><div class="rows">${games.map(g => { const aw = g.ap > g.bp; const bw = g.bp > g.ap;
     return `<button type="button" class="row rowbtn" data-matchup="${key(g)}" style="grid-template-columns:minmax(0,1fr) auto auto minmax(0,1fr);text-align:left;width:100%">
-      <span class="name" style="font-size:14px;${aw ? '' : 'color:#8A9C9F'}">${nm(g.a)}</span><span class="num" style="font-size:14px;${aw ? '' : 'color:#8A9C9F'}">${f2(g.ap)}</span>
-      <span class="num" style="font-size:14px;${bw ? '' : 'color:#8A9C9F'}">${f2(g.bp)}</span><span class="name" style="font-size:14px;text-align:right;${bw ? '' : 'color:#8A9C9F'}">${nm(g.b)}</span></button>${g.label ? `<span class="note" style="margin:-6px 0 4px">${esc(g.label)}</span>` : ''}`; }).join('')}</div>`));
+      <span class="name" style="font-size:14px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${aw ? '' : 'color:#8A9C9F'}">${nm(g.a)}</span><span class="num" style="font-size:14px;${aw ? '' : 'color:#8A9C9F'}">${f2(g.ap)}</span>
+      <span class="num" style="font-size:14px;${bw ? '' : 'color:#8A9C9F'}">${f2(g.bp)}</span><span class="name" style="font-size:14px;text-align:right;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${bw ? '' : 'color:#8A9C9F'}">${nm(g.b)}</span></button>${g.label ? `<span class="note" style="margin:-6px 0 4px">${esc(g.label)}</span>` : ''}`; }).join('')}</div>`));
   // Waiver adds made this week, by what they've given their team since.
   const adds = [].concat.apply([], S.rids.map(r => (S.waivers[r].list || []).filter(x => x.week === w).map(x => ({ r, x })))).sort((a, b) => b.x.pts - a.x.pts);
   if (adds.length) out.push(section(`<div class="head"><h2>Waiver adds</h2><span class="note">${adds.length} this week · best first</span></div><div class="rows">${adds.slice(0, 5).map(({ r, x }) => `<a class="row" href="${mlink(S.ownerOf[r])}@${S.season}" style="grid-template-columns:minmax(0,1fr) auto;text-decoration:none">
