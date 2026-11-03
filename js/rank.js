@@ -9,6 +9,7 @@ const pct = x => (x * 100).toFixed(1) + '%';
 const p3 = x => x.toFixed(3).replace(/^0/, '');
 const sgn = x => (x > 0 ? '+' : x < 0 ? '−' : '') + Math.abs(x).toFixed(1);
 const wl = (w, l, t) => w + '–' + l + (t ? '–' + t : '');
+const plink = (M, pid) => `<span class="plink" data-player="${esc(pid)}">${esc(M.playerName(pid))}</span>`;
 const ordinal = n => { const s = ['th', 'st', 'nd', 'rd']; const v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); };
 
 const POS = { qb: 'QB', qbs: 'QB', quarterback: 'QB', quarterbacks: 'QB', rb: 'RB', rbs: 'RB', 'running back': 'RB', 'running backs': 'RB',
@@ -30,6 +31,8 @@ export function parseRank(t) {
   else if (/\btrades?\b/.test(t)) entity = 'trade';
   else if (/\b(pickups?|waiver|waivers|adds?|free agents?|faab)\b/.test(t)) entity = 'pickup';
   else if ((/\b(player|players)\b/.test(t) || Object.keys(POS).some(k => new RegExp('\\b' + k + '\\b').test(t))) && /\bseasons?\b/.test(t)) entity = 'playerSeason';
+  // A player's whole run in the league: "best RB ever", "most points by a player all time", "best WR career by value".
+  else if ((/\b(player|players)\b/.test(t) || Object.keys(POS).some(k => new RegExp('\\b' + k + '\\b').test(t))) && /\b(ever|career|careers|all[- ]time|of all time|in league history|history)\b/.test(t) && !/\b(week|weeks|performance|performances|single|pick|picks|pickup|pickups|trade|trades)\b/.test(t) && !/\b(?<!per )games?\b/.test(t)) entity = 'playerCareer';
   else if (/\b(blowout|blowouts|closest|margin)\b/.test(t)) entity = 'game';
   else if (/\b(in a loss|in a win)\b/.test(t)) entity = 'score';
   else if (/\bseasons?\b|\byears?\b/.test(t)) entity = 'season';
@@ -128,7 +131,7 @@ export function rankAnswer(M, P, R) {
         if (st.games < Math.min(minGames, S.isCurrent ? 2 : minGames)) return;
         const v = metric === 'ppg' ? (st.games ? st.pts / st.games : 0) : metric === 'points' ? st.pts : p.value;
         const slot = p.round + '.' + String(((p.pick_no - 1) % S.rids.length) + 1).padStart(2, '0');
-        rows.push({ v, label: esc(M.playerName(p.player_id)) + ' <span class="note">' + esc(p.pos) + (S.posRank[p.player_id] ? S.posRank[p.player_id] : '') + '</span>',
+        rows.push({ v, label: plink(M, p.player_id) + ' <span class="note">' + esc(p.pos) + (S.posRank[p.player_id] ? S.posRank[p.player_id] : '') + '</span>',
           sub: link(S.ownerOf[p.roster_id]) + ' · ' + S.season + ' pick ' + slot + ' · ' + f1(st.pts) + ' pts in ' + st.games + ' games' + (S.isCurrent ? ' so far' : '') });
       }); });
     if (metric === 'ppg') note = 'Points per game counts weeks the player scored, regular season only, with at least 4 games (2 for the current season).';
@@ -137,12 +140,12 @@ export function rankAnswer(M, P, R) {
     M.allTrades.forEach(t => { if (P.season && t.season !== P.season) return;
       t.sides.forEach(s => { if (mgr && s.owner !== mgr) return;
         const others = t.sides.filter(x => x !== s).map(x => link(x.owner)).join(' & ');
-        rows.push({ v: s.net, label: link(s.owner) + ' with ' + others, sub: t.season + ' · Week ' + t.week + ' · got ' + (s.got.map(g => esc(M.playerName(g.pid))).join(', ') || 'picks') + ' for ' + (s.sent.map(g => esc(M.playerName(g.pid))).join(', ') || 'picks') }); }); });
+        rows.push({ v: s.net, label: link(s.owner) + ' with ' + others, sub: t.season + ' · Week ' + t.week + ' · got ' + (s.got.map(g => plink(M, g.pid)).join(', ') || 'picks') + ' for ' + (s.sent.map(g => plink(M, g.pid)).join(', ') || 'picks') }); }); });
   } else if (R.entity === 'pickup') {
     entityLabel = (R.pos ? R.pos + ' ' : '') + 'pickup'; metricLabel = 'points above replacement after the pickup'; fmt = f1;
     seasons.forEach(S => S.rids.forEach(r => { if (!ok(S, r)) return; (S.waivers[r].list || []).forEach(a => {
       if (R.pos && S.posOf(a.pid) !== R.pos) return;
-      rows.push({ v: a.pts, label: esc(M.playerName(a.pid)) + ' <span class="note">' + esc(S.posOf(a.pid)) + '</span>', sub: link(S.ownerOf[r]) + ' · ' + S.season + ' Week ' + a.week + ' · ' + f1(a.raw != null ? a.raw : a.pts) + ' pts in ' + a.starts + ' starts' + (a.bid ? ' · $' + a.bid : '') }); }); }));
+      rows.push({ v: a.pts, label: plink(M, a.pid) + ' <span class="note">' + esc(S.posOf(a.pid)) + '</span>', sub: link(S.ownerOf[r]) + ' · ' + S.season + ' Week ' + a.week + ' · ' + f1(a.raw != null ? a.raw : a.pts) + ' pts in ' + a.starts + ' starts' + (a.bid ? ' · $' + a.bid : '') }); }); }));
   } else if (R.entity === 'playerSeason') {
     metric = metric === 'ppg' ? 'ppg' : 'points';
     entityLabel = (R.pos ? R.pos + ' ' : 'player ') + 'season'; metricLabel = metric === 'ppg' ? 'starter points per start' : 'starter points for one team';
@@ -153,8 +156,24 @@ export function rankAnswer(M, P, R) {
         m.starters.forEach(p => { if (!p || p === '0') return; const x = tot[p] = tot[p] || { pts: 0, starts: 0 }; x.pts += m.players_points[p] || 0; x.starts++; }); }
       Object.keys(tot).forEach(p => { if (R.pos && S.posOf(p) !== R.pos) return; if (pid && p !== pid) return; const x = tot[p];
         if (metric === 'ppg' && x.starts < 6) return;
-        rows.push({ v: metric === 'ppg' ? x.pts / x.starts : x.pts, label: esc(M.playerName(p)) + ' <span class="note">' + esc(S.posOf(p)) + '</span>', sub: link(S.ownerOf[r]) + ' · ' + S.season + ' · ' + x.starts + ' starts' + (S.isCurrent ? ' so far' : '') }); }); }));
+        rows.push({ v: metric === 'ppg' ? x.pts / x.starts : x.pts, label: plink(M, p) + ' <span class="note">' + esc(S.posOf(p)) + '</span>', sub: link(S.ownerOf[r]) + ' · ' + S.season + ' · ' + x.starts + ' starts' + (S.isCurrent ? ' so far' : '') }); }); }));
     if (metric === 'ppg') note = 'At least 6 starts.';
+  } else if (R.entity === 'playerCareer') {
+    // Every season he was rostered: regular-season points, games, value over replacement, best finish.
+    metric = metric === 'ppg' ? 'ppg' : metric === 'value' ? 'value' : 'points';
+    entityLabel = R.pos ? R.pos : 'player'; metricLabel = metric === 'ppg' ? 'points per game in the league' : metric === 'value' ? 'points above replacement, all seasons' : 'points in the league';
+    fmt = metric === 'ppg' ? f2 : metric === 'value' ? sgn : f1;
+    const car = {};
+    seasons.forEach(S => { const ps = playerSeasonStats(S);
+      Object.keys(ps).forEach(p => { if (R.pos && S.posOf(p) !== R.pos) return; if (pid && p !== pid) return;
+        if (mgr && !S.rids.some(r => S.ownerOf[r] === mgr && Object.values(S.byWeek).some(wk => wk[r] && wk[r].players.indexOf(p) >= 0))) return;
+        const x = car[p] = car[p] || { pts: 0, games: 0, val: 0, seasons: [], best: null };
+        x.pts += ps[p].pts; x.games += ps[p].games; x.val += S.aboveRepl ? S.aboveRepl(p) : 0; x.seasons.push(S.season);
+        const k = S.posRank[p]; if (k && (!x.best || k < x.best.k)) x.best = { k, season: S.season, pos: S.posOf(p) }; }); });
+    Object.keys(car).forEach(p => { const x = car[p]; if (metric === 'ppg' && x.games < 10) return;
+      rows.push({ v: metric === 'ppg' ? x.pts / x.games : metric === 'value' ? x.val : x.pts, label: plink(M, p) + ' <span class="note">' + esc(M.playerPos(p)) + '</span>',
+        sub: x.seasons.length + ' season' + (x.seasons.length === 1 ? '' : 's') + ' · ' + f1(x.pts) + ' pts in ' + x.games + ' games' + (x.best ? ' · best finish ' + esc(x.best.pos) + x.best.k + ' (' + x.best.season + ')' : '') }); });
+    note = 'Regular-season weeks he was on a roster in this league.' + (metric === 'ppg' ? ' At least 10 games.' : '');
   } else if (R.entity === 'perf') {
     entityLabel = (R.pos ? R.pos + ' ' : 'player ') + 'game'; metricLabel = 'points as a starter'; fmt = f2;
     seasons.forEach(S => S.rids.forEach(r => { if (!ok(S, r)) return;
@@ -162,7 +181,7 @@ export function rankAnswer(M, P, R) {
         const po = w >= S.playoffWeekStart; if (R.playoffs && !(po && S.games.some(g => g.week === w && (g.a === r || g.b === r)))) continue;
         if (w >= S.playoffWeekStart && !R.playoffs && !S.games.some(g => g.week === w && (g.a === r || g.b === r))) continue;
         m.starters.forEach(p => { if (!p || p === '0') return; if (R.pos && S.posOf(p) !== R.pos) return; if (pid && p !== pid) return;
-          rows.push({ v: m.players_points[p] || 0, label: esc(M.playerName(p)) + ' <span class="note">' + esc(S.posOf(p)) + '</span>', sub: link(S.ownerOf[r]) + ' · ' + S.season + ' Week ' + w + (po ? ' · playoffs' : '') }); }); } }));
+          rows.push({ v: m.players_points[p] || 0, label: plink(M, p) + ' <span class="note">' + esc(S.posOf(p)) + '</span>', sub: link(S.ownerOf[r]) + ' · ' + S.season + ' Week ' + w + (po ? ' · playoffs' : '') }); }); } }));
   } else if (R.entity === 'score' || R.entity === 'game') {
     const games = [];
     seasons.forEach(S => S.games.forEach(g => { if (R.playoffs && !g.playoff) return; games.push({ S, g }); }));

@@ -2,7 +2,7 @@
 // season, week and player it is about, and answers from the league data.
 // Rule-based, so it understands the question shapes listed in EXAMPLES and HELP.
 
-import { parseRank, rankAnswer } from './rank.js?v=202611022320';
+import { parseRank, rankAnswer } from './rank.js?v=202611022345';
 
 export const EXAMPLES = [
   'Best season ever by manager score',
@@ -10,7 +10,8 @@ export const EXAMPLES = [
   'Most points in a loss',
   'Luckiest manager',
   'Biggest blowout in the playoffs',
-  'Best QB pickup'
+  'Best QB pickup',
+  'Best RB ever'
 ];
 
 // Example questions built from a league's own managers and seasons.
@@ -51,8 +52,9 @@ function managerIndex(M) {
 const playerIdxCache = new WeakMap();
 function playerIndex(M) {
   if (playerIdxCache.has(M)) return playerIdxCache.get(M);
-  const seen = new Set();
-  M.seasons.forEach(S => Object.values(S.byWeek).forEach(week => Object.values(week).forEach(m => m.players.forEach(p => seen.add(p)))));
+  const seen = new Set(); const pts = {};
+  M.seasons.forEach(S => { Object.values(S.byWeek).forEach(week => Object.values(week).forEach(m => m.players.forEach(p => seen.add(p))));
+    Object.keys(S.playerPts || {}).forEach(p => { pts[p] = (pts[p] || 0) + S.playerPts[p]; }); });
   const full = []; const lastCount = {};
   seen.forEach(pid => {
     const n = M.playerName(pid);
@@ -60,7 +62,7 @@ function playerIndex(M) {
     const lower = n.toLowerCase().replace(/[^a-z0-9' .-]/g, '');
     const parts = lower.split(' ');
     const last = parts[parts.length - 1].replace(/\b(jr|sr|ii|iii|iv)\.?$/, '').trim() || parts[parts.length - 2] || '';
-    full.push({ pid, lower, last });
+    full.push({ pid, lower, last, pts: pts[pid] || 0 });
     lastCount[last] = (lastCount[last] || 0) + 1;
   });
   const idx = { full, lastCount };
@@ -105,8 +107,10 @@ export function parse(q, M) {
   const inTaken = i => taken.some(t => i >= t[0] && i < t[1]);
   playerSpans.forEach(p => out.players.push(p));
   if (!out.players.length) {
-    idx.full.forEach(p => {
-      if (p.last.length < 4 || STOP.has(p.last) || idx.lastCount[p.last] > 1) return;
+    // A last name alone; when several players share it, the one who scored the most in the league.
+    const byLast = {};
+    idx.full.forEach(p => { if (p.last.length < 4 || STOP.has(p.last)) return; if (!byLast[p.last] || p.pts > byLast[p.last].pts) byLast[p.last] = p; });
+    Object.values(byLast).forEach(p => {
       const i = text.indexOf(' ' + p.last + ' ');
       if (i >= 0 && !inTaken(i + 1)) out.players.push({ pid: p.pid, at: i, len: p.last.length });
     });
@@ -131,6 +135,7 @@ export function parse(q, M) {
 }
 
 // ---------- answering ----------
+const plink = (M, pid) => `<span class="plink" data-player="${esc(pid)}">${esc(M.playerName(pid))}</span>`;
 const card = (title, body) => `<div class="answer"><h2 class="ans-title">${title}</h2>${body || ''}</div>`;
 const note = t => `<p class="note" style="margin:0">${t}</p>`;
 
@@ -145,7 +150,7 @@ function gameFor(S, w, rid) { return S.games.find(g => g.week === w && (g.a === 
 function lineupTable(M, S, m) {
   const rows = m.starters.map((pid, i) => ({ slot: S.slots[i] || '', pid, pts: m.players_points[pid] || 0 }));
   const bench = m.players.filter(p => m.starters.indexOf(p) < 0).map(pid => ({ pid, pts: m.players_points[pid] || 0 })).sort((a, b) => b.pts - a.pts);
-  const nameCell = pid => pid && pid !== '0' ? esc(M.playerName(pid)) + ' <span class="note">' + esc(S.posOf(pid)) + '</span>' : '<span class="note">Empty</span>';
+  const nameCell = pid => pid && pid !== '0' ? plink(M, pid) + ' <span class="note">' + esc(S.posOf(pid)) + '</span>' : '<span class="note">Empty</span>';
   return `<div class="scroll"><table class="table"><thead><tr><th>Starter</th><th>Slot</th><th>Pts</th></tr></thead><tbody>
     ${rows.map(r => `<tr><td class="t">${nameCell(r.pid)}</td><td style="color:#8A9C9F">${esc(r.slot.replace('_', ' '))}</td><td>${f2(r.pts)}</td></tr>`).join('')}</tbody></table></div>
     ${bench.length ? `<div class="scroll"><table class="table"><thead><tr><th>Bench</th><th></th><th>Pts</th></tr></thead><tbody>
@@ -203,7 +208,7 @@ export function answer(M, P) {
     if (!adds.length) return card(`${name(id)} made no pickups in ${S.season}.`);
     return card(`${link(id)} made ${adds.length} pickups in ${S.season} for ${f2(w.pts)} pts above replacement${S.usesFaab ? ' and $' + w.faab + ' FAAB' : ''}.`,
       `<div class="scroll"><table class="table"><thead><tr><th>Player</th><th>Week</th>${S.usesFaab ? '<th>Bid</th>' : ''}<th>Starts</th><th>Pts</th><th>Over repl.</th></tr></thead><tbody>
-      ${adds.slice(0, 25).map(a => `<tr><td class="t" style="font-weight:400">${esc(M.playerName(a.pid))} <span class="note">${esc(S.posOf(a.pid))}</span></td><td>${a.week}</td>${S.usesFaab ? `<td>${a.bid ? '$' + a.bid : 'FA'}</td>` : ''}<td>${a.starts}</td><td>${f2(a.raw != null ? a.raw : a.pts)}</td><td>${f2(a.pts)}</td></tr>`).join('')}</tbody></table></div>` +
+      ${adds.slice(0, 25).map(a => `<tr><td class="t" style="font-weight:400">${plink(M, a.pid)} <span class="note">${esc(S.posOf(a.pid))}</span></td><td>${a.week}</td>${S.usesFaab ? `<td>${a.bid ? '$' + a.bid : 'FA'}</td>` : ''}<td>${a.starts}</td><td>${f2(a.raw != null ? a.raw : a.pts)}</td><td>${f2(a.pts)}</td></tr>`).join('')}</tbody></table></div>` +
       (adds.length > 25 ? note('Showing the 25 best of ' + adds.length + '.') : '') + (P.season ? '' : note('Showing ' + S.season + '. Add a year for another season.')));
   }
 
@@ -222,8 +227,8 @@ export function answer(M, P) {
       const pick = pool.slice().sort((x, y) => P.intent === 'lowPlayer' ? x.pts - y.pts : y.pts - x.pts)[0];
       if (!pick) return card('No players on record that week.');
       const topStarter = starters.slice().sort((x, y) => y.pts - x.pts)[0];
-      return card(`${link(id)}'s ${P.intent === 'lowPlayer' ? 'lowest-scoring starter' : 'highest-scoring player'} in Week ${P.week} of ${S.season} was ${esc(M.playerName(pick.pid))} with ${f2(pick.pts)} pts.`,
-        note((pick.started ? 'He was in the starting lineup.' : `He was on the bench. Top starter: ${esc(M.playerName(topStarter.pid))} (${f2(topStarter.pts)}).`) + ' ' + weekLine(M, S, P.week, rid)) + assumeNote + lineupTable(M, S, m));
+      return card(`${link(id)}'s ${P.intent === 'lowPlayer' ? 'lowest-scoring starter' : 'highest-scoring player'} in Week ${P.week} of ${S.season} was ${plink(M, pick.pid)} with ${f2(pick.pts)} pts.`,
+        note((pick.started ? 'He was in the starting lineup.' : `He was on the bench. Top starter: ${plink(M, topStarter.pid)} (${f2(topStarter.pts)}).`) + ' ' + weekLine(M, S, P.week, rid)) + assumeNote + lineupTable(M, S, m));
     }
     if (P.intent === 'bench') {
       const benchPts = all.filter(p => !p.started).reduce((s, p) => s + p.pts, 0);
@@ -232,7 +237,7 @@ export function answer(M, P) {
     if (P.players.length) {
       const pid = P.players[0];
       const p = all.find(x => x.pid === pid);
-      return card(p ? `${esc(M.playerName(pid))} scored ${f2(p.pts)} for ${link(id)} in Week ${P.week} of ${S.season}${p.started ? '' : ' (on the bench)'}.` : `${esc(M.playerName(pid))} wasn't on ${name(id)}'s roster in Week ${P.week} of ${S.season}.`, assumeNote + lineupTable(M, S, m));
+      return card(p ? `${plink(M, pid)} scored ${f2(p.pts)} for ${link(id)} in Week ${P.week} of ${S.season}${p.started ? '' : ' (on the bench)'}.` : `${plink(M, pid)} wasn't on ${name(id)}'s roster in Week ${P.week} of ${S.season}.`, assumeNote + lineupTable(M, S, m));
     }
     return card(`${link(id)} in Week ${P.week} of ${S.season}`, note(weekLine(M, S, P.week, rid)) + assumeNote + lineupTable(M, S, m));
   }
@@ -256,12 +261,13 @@ export function answer(M, P) {
         if (weeks) rows.push({ S, r, pts, starts, weeks, best });
       });
     });
-    const pn = esc(M.playerName(pid));
-    if (!rows.length) return card(`${pn} never played for ${id ? name(id) : 'anyone in the league'}${P.season ? ' in ' + P.season : ''}.`);
+    const pn = plink(M, pid);
+    const page = `<a class="btn" href="${M.px}p-${encodeURIComponent(pid)}" style="margin-top:12px">Open ${plink(M, pid)}’s player page →</a>`;
+    if (!rows.length) return card(`${pn} never played for ${id ? name(id) : 'anyone in the league'}${P.season ? ' in ' + P.season : ''}.`, page);
     const total = rows.reduce((s, x) => s + x.pts, 0);
     return card(id ? `${pn} scored ${f2(total)} starter pts for ${link(id)}${P.season ? ' in ' + P.season : ''}.` : `${pn} in the league${P.season ? ', ' + P.season : ''}`,
       `<div class="scroll"><table class="table"><thead><tr><th>Season · team</th><th>Weeks</th><th>Starts</th><th>Starter pts</th><th>Best week</th></tr></thead><tbody>
-      ${rows.map(x => `<tr><td class="t" style="font-weight:400">${x.S.season} · ${link(x.S.ownerOf[x.r])}</td><td>${x.weeks}</td><td>${x.starts}</td><td>${f2(x.pts)}</td><td>${f2(x.best.p)} <span class="note">W${x.best.w}</span></td></tr>`).join('')}</tbody></table></div>`);
+      ${rows.map(x => `<tr><td class="t" style="font-weight:400">${x.S.season} · ${link(x.S.ownerOf[x.r])}</td><td>${x.weeks}</td><td>${x.starts}</td><td>${f2(x.pts)}</td><td>${f2(x.best.p)} <span class="note">W${x.best.w}</span></td></tr>`).join('')}</tbody></table></div>` + page);
   }
 
   // One manager, no week
@@ -279,28 +285,28 @@ export function answer(M, P) {
           `<div class="rows">${top.map(x => `<div class="row" style="grid-template-columns:minmax(0,1fr) auto;padding:10px 0"><span>${x.S.season} · Week ${x.w}</span><span class="num">${f2(x.pts)}</span></div>`).join('')}</div>`);
       }
       const top = perf.sort((a, b) => P.intent === 'lowPlayer' ? a.pts - b.pts : b.pts - a.pts).slice(0, 5);
-      return card(`${link(id)}'s ${P.intent === 'lowPlayer' ? 'lowest' : 'best'} single-week starter${P.season ? ' in ' + P.season : ' ever'}: ${esc(M.playerName(top[0].pid))}, ${f2(top[0].pts)} pts in Week ${top[0].w} of ${top[0].S.season}.`,
-        `<div class="rows">${top.map(x => `<div class="row" style="grid-template-columns:minmax(0,1fr) auto;padding:10px 0"><span class="stack"><span>${esc(M.playerName(x.pid))}</span><span class="sub">${x.S.season} · Week ${x.w}</span></span><span class="num">${f2(x.pts)}</span></div>`).join('')}</div>` +
+      return card(`${link(id)}'s ${P.intent === 'lowPlayer' ? 'lowest' : 'best'} single-week starter${P.season ? ' in ' + P.season : ' ever'}: ${plink(M, top[0].pid)}, ${f2(top[0].pts)} pts in Week ${top[0].w} of ${top[0].S.season}.`,
+        `<div class="rows">${top.map(x => `<div class="row" style="grid-template-columns:minmax(0,1fr) auto;padding:10px 0"><span class="stack"><span>${plink(M, x.pid)}</span><span class="sub">${x.S.season} · Week ${x.w}</span></span><span class="num">${f2(x.pts)}</span></div>`).join('')}</div>` +
         note('Add a week (like "week 7 2023") to see a single lineup.'));
     }
     if (P.intent === 'draft') {
       const S = list[0]; const r = ridOf(S, id);
       const picks = S.picks.filter(p => p.roster_id === r).sort((a, b) => a.pick_no - b.pick_no);
       return card(`${link(id)}'s ${S.season} draft`, `<div class="scroll"><table class="table"><thead><tr><th>Player</th><th>Pick</th><th>Finish</th><th>vs. slot</th></tr></thead><tbody>
-        ${picks.map(p => `<tr><td class="t" style="font-weight:400">${esc(M.playerName(p.player_id))} <span class="note">${esc(p.pos)}</span></td><td>R${p.round} · ${p.pick_no}</td><td>${S.posRank[p.player_id] ? esc(p.pos) + S.posRank[p.player_id] : '—'}</td><td class="${p.value >= 0 ? 'up' : 'down'}">${(p.value >= 0 ? '+' : '−') + Math.abs(Math.round(p.value))}</td></tr>`).join('')}</tbody></table></div>` + (P.season ? '' : note('Showing the most recent draft. Add a year for another.')));
+        ${picks.map(p => `<tr><td class="t" style="font-weight:400">${plink(M, p.player_id)} <span class="note">${esc(p.pos)}</span></td><td>R${p.round} · ${p.pick_no}</td><td>${S.posRank[p.player_id] ? esc(p.pos) + S.posRank[p.player_id] : '—'}</td><td class="${p.value >= 0 ? 'up' : 'down'}">${(p.value >= 0 ? '+' : '−') + Math.abs(Math.round(p.value))}</td></tr>`).join('')}</tbody></table></div>` + (P.season ? '' : note('Showing the most recent draft. Add a year for another.')));
     }
     if (P.intent === 'trades') {
       const trades = M.allTrades.filter(t => (!P.season || t.season === P.season) && t.sides.some(s => s.owner === id));
       if (!trades.length) return card(`${name(id)} made no trades${P.season ? ' in ' + P.season : ''}.`);
       return card(`${link(id)}'s trades${P.season ? ' in ' + P.season : ''}`, trades.slice().reverse().map(t => { const s = t.sides.find(x => x.owner === id);
         return `<div class="box"><div class="top-line"><span>${t.season} · Week ${t.week}</span><span class="${s.net >= 0 ? 'up' : 'down'}">${(s.net >= 0 ? '+' : '−') + Math.abs(s.net).toFixed(1)}</span></div>
-          <span style="font-size:14px">Got ${s.got.map(g => esc(M.playerName(g.pid))).join(', ') || 'picks'} · sent ${s.sent.map(g => esc(M.playerName(g.pid))).join(', ') || 'picks'}</span></div>`; }).join(''));
+          <span style="font-size:14px">Got ${s.got.map(g => plink(M, g.pid)).join(', ') || 'picks'} · sent ${s.sent.map(g => plink(M, g.pid)).join(', ') || 'picks'}</span></div>`; }).join(''));
     }
     if (P.season) {
       const S = list[0]; const r = ridOf(S, id); const st = S.st[r]; const mvp = S.mvp[r];
       return card(`${link(id)} in ${S.season}: ${wl(st.wins, st.losses, st.ties)}, ${ordinal(st.rank)} place${S.champion === r ? ', champion' : S.lastPlace === r ? ', last place' : ''}.`,
         `<div class="tiles"><div class="tile"><span class="k">Points for</span><span class="v">${f2(st.pf)}</span></div><div class="tile"><span class="k">Manager Score</span><span class="v">${Math.round(S.scores[r].total)}</span></div>
-        <div class="tile"><span class="k">Team MVP</span><span class="w">${mvp ? esc(M.playerName(mvp.pid)) + ' · ' + f2(mvp.pts) : '—'}</span></div><div class="tile"><span class="k">Start/sit</span><span class="v">${(S.efficiency[r].pct * 100).toFixed(1)}%</span></div></div>` +
+        <div class="tile"><span class="k">Team MVP</span><span class="w">${mvp ? plink(M, mvp.pid) + ' · ' + f2(mvp.pts) : '—'}</span></div><div class="tile"><span class="k">Start/sit</span><span class="v">${(S.efficiency[r].pct * 100).toFixed(1)}%</span></div></div>` +
         `<a class="btn" href="${M.px}s${S.season}">Open the ${S.season} tab →</a>`);
     }
     const c = M.career[id];
@@ -325,8 +331,8 @@ export function answer(M, P) {
       const perf = [];
       S.rids.forEach(r => { for (let w = 1; w <= S.scoredThrough; w++) { const m = S.byWeek[w] && S.byWeek[w][r]; if (m) m.starters.forEach(pid => { if (pid && pid !== '0') perf.push({ r, w, pid, pts: m.players_points[pid] || 0 }); }); } });
       const top = perf.sort((a, b) => b.pts - a.pts).slice(0, 5);
-      return card(`Best single-week starter of ${S.season}: ${esc(M.playerName(top[0].pid))}, ${f2(top[0].pts)} for ${link(S.ownerOf[top[0].r])} in Week ${top[0].w}.`,
-        `<div class="rows">${top.map(x => `<div class="row" style="grid-template-columns:minmax(0,1fr) auto;padding:10px 0"><span class="stack"><span>${esc(M.playerName(x.pid))}</span><span class="sub">${link(S.ownerOf[x.r])} · Week ${x.w}</span></span><span class="num">${f2(x.pts)}</span></div>`).join('')}</div>`);
+      return card(`Best single-week starter of ${S.season}: ${plink(M, top[0].pid)}, ${f2(top[0].pts)} for ${link(S.ownerOf[top[0].r])} in Week ${top[0].w}.`,
+        `<div class="rows">${top.map(x => `<div class="row" style="grid-template-columns:minmax(0,1fr) auto;padding:10px 0"><span class="stack"><span>${plink(M, x.pid)}</span><span class="sub">${link(S.ownerOf[x.r])} · Week ${x.w}</span></span><span class="num">${f2(x.pts)}</span></div>`).join('')}</div>`);
     }
     const all = [];
     S.rids.forEach(r => { for (let w = 1; w < S.playoffWeekStart && w <= S.scoredThrough; w++) { const m = S.byWeek[w] && S.byWeek[w][r]; if (m) all.push({ r, w, pts: m.points }); } });
@@ -344,7 +350,8 @@ export const HELP = `<p class="lead">Name a manager, a player, a season and a we
 <li><b>A manager's week:</b> lineup, highest- or lowest-scoring player, bench points</li>
 <li><b>A manager's season or career:</b> record, best score, best starter, draft, trades, waiver pickups</li>
 <li><b>Two managers:</b> head-to-head record and every game</li>
-<li><b>A player:</b> points for a manager, or every team he played for</li>
+<li><b>A player:</b> his name alone for every team he played for (and a link to his player page), or points for a manager</li>
+<li><b>Players, all time:</b> best <i>players ever</i> by points, points per game or value (e.g. “best RB ever”, “most points by a WR all time”)</li>
 <li><b>A week or season:</b> highest or lowest score, every matchup</li>
 <li><b>Rankings, all-time or for one year:</b> best/worst <i>seasons</i> by Manager Score, wins, points or luck; <i>managers</i> by titles, clutch or start/sit; <i>draft picks</i> by round, position, points per game or value; <i>trades</i>; <i>pickups</i>; <i>player games</i> and <i>player seasons</i>; <i>scores</i> in a win or loss; <i>blowouts</i> and <i>closest games</i></li>
 </ul>`;
