@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202611030005';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons, checkOwner, saveOwner } from './data.js?v=202611030005';
-import { buildModel, optimalPoints } from './model.js?v=202611030005';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202611030005';
+import { CONFIG } from './config.js?v=202611030020';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons, checkOwner, saveOwner } from './data.js?v=202611030020';
+import { buildModel, optimalPoints } from './model.js?v=202611030020';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202611030020';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -1429,7 +1429,7 @@ function viewDynDrafts(sel) {
 
   {
     const dr = (C.S.drafts || []).find(d => d.draftId === C.draftId);
-    out.push(draftBoard({ picks: C.picks, n: C.teams, dr, team: r => name(C.S.ownerOf[r]),
+    out.push(draftBoard({ title: C.season + ' ' + C.kind + ' draft board', picks: C.picks, n: C.teams, dr, team: r => name(C.S.ownerOf[r]),
       grade: p => (C.graded && p.z != null ? gradeOf(p.z) : null),
       attrs: p => (C.teams_ ? ` data-dyn-team="${dynKey(C)}:${p.roster_id}"` : ''),
       under: p => (p.bestFinish ? 'best ' + esc(p.pos || '') + p.bestFinish : ''),
@@ -1638,7 +1638,7 @@ function viewDrafts(seasonSel) {
     const all = S.picks.map(p => p.value); const mu = mean0(all);
     const sdv = Math.sqrt(all.reduce((a, b) => a + (b - mu) * (b - mu), 0) / Math.max(1, all.length - 1)) || 1;
     const dr = (S.drafts || []).find(d => (d.picks || []).some(q => S.picks[0] && q.player_id === S.picks[0].player_id && q.pick_no === S.picks[0].pick_no));
-    out.push(draftBoard({ picks: S.picks, n, dr, team: r => nm(r),
+    out.push(draftBoard({ title: S.season + ' draft board', picks: S.picks, n, dr, team: r => nm(r),
       grade: p => (showGrades ? gradeOf((p.value - mu) / sdv) : null),
       attrs: p => ` data-draft-team="${S.season}:${p.roster_id}"`,
       under: p => (S.posRank[p.player_id] ? 'finished ' + esc(p.pos) + S.posRank[p.player_id] : '') }));
@@ -2062,6 +2062,24 @@ const mean0 = xs => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 // ---------- Draft board ----------
 // The whole draft as a grid: teams across in draft order, rounds down. Each pick is tinted by its grade; a traded pick
 // names the team that made it. Tapping a player opens his page; tapping elsewhere opens that team's draft.
+const BOARDS = [];
+function openBoard(key) {
+  const B = BOARDS[Number(key.slice(1))];
+  if (!B) return;
+  let dlg = document.getElementById('board-modal');
+  if (!dlg) {
+    dlg = document.createElement('dialog');
+    dlg.id = 'board-modal'; dlg.className = 'modal board-modal';
+    dlg.setAttribute('aria-labelledby', 'board-title');
+    document.body.appendChild(dlg);
+    dlg.addEventListener('click', e => { if (e.target === dlg || e.target.closest('[data-close]')) dlg.close(); });
+  }
+  dlg.innerHTML = `<div class="modal-card"><div class="line2" style="align-items:center"><h2 id="board-title" style="font-size:18px">${B.title} <span class="note" style="font-size:13px;font-weight:400">${B.note}</span></h2>
+    <button type="button" class="close" data-close aria-label="Close">✕</button></div>${B.grid}${B.legend}</div>`;
+  if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
+  const c = dlg.querySelector('.close'); if (c) c.focus();
+}
+document.addEventListener('click', e => { const b = e.target.closest('[data-board]'); if (b) { e.preventDefault(); openBoard(b.dataset.board); } });
 function draftBoard(o) {
   const { picks, n, dr, grade, attrs, under } = o;
   if (!picks.length || !n) return '';
@@ -2085,9 +2103,15 @@ function draftBoard(o) {
       <span class="dname">${player(p.player_id)}</span>
       <span class="dsub">${esc(p.pos || M.playerPos(p.player_id) || '')}${under(p) ? ' · ' + under(p) : ''}</span>
       ${traded ? `<span class="dsub dvia">→ ${o.team(p.roster_id)}</span>` : ''}</div>`; }).join('')}`).join('');
-  return section(`<details class="calc board-dd" open><summary><h2>Draft board</h2><span class="note">${o.note || 'Tinted by grade · tap a pick for that team’s draft'}</span></summary>
-    <div class="calc-body"><div class="dboard" style="grid-template-columns:40px repeat(${n}, minmax(108px, 1fr))">${head}${cells}</div>
-    <span class="note">${o.legend || ''}A = a standout pick for its slot, C = about what the slot usually gives, F = far below. → = a traded pick, made by that team.</span></div></details>`);
+  const grid = `<div class="dboard" style="grid-template-columns:40px repeat(${n}, minmax(var(--dcol, 108px), 1fr))">${head}${cells}</div>`;
+  const legend = `<span class="note">${o.legend || ''}A = a standout pick for its slot, C = about what the slot usually gives, F = far below. → = a traded pick, made by that team.</span>`;
+  const note = o.note || 'Tinted by grade · tap a pick for that team’s draft';
+  const key = 'b' + (BOARDS.push({ title: o.title || 'Draft board', note, grid, legend }) - 1);
+  // Desktop: a button that opens the board in a large pop-up. Phones: the board inline, collapsible.
+  return section(`<div class="board-open"><div class="head"><h2>Draft board</h2><span class="note">${note}</span></div>
+      <button type="button" class="btn" data-board="${key}">Open the draft board</button></div>
+    <details class="calc board-dd board-inline" open><summary><h2>Draft board</h2><span class="note">${note}</span></summary>
+    <div class="calc-body">${grid}${legend}</div></details>`);
 }
 
 // ---------- Stat search ----------

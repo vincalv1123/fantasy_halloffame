@@ -447,3 +447,11 @@ button.tile.tbtn:hover, button.tile.tbtn:focus-visible { background: var(--panel
 .dcell.g-C { border-left-color: #6E7F82; } .dcell.g-C .dtop b { color: #C9D3D2; }
 .dcell.g-D { border-left-color: #F2B59E; background: rgba(242, 181, 158, .09); } .dcell.g-D .dtop b { color: #F2B59E; }
 .dcell.g-F { border-left-color: #F0907A; background: rgba(240, 144, 122, .16); } .dcell.g-F .dtop b { color: #F0907A; }
+
+/* Draft board: a pop-up on desktop, inline on phones. */
+.modal.board-modal { max-width: min(1500px, calc(100vw - 32px)); }
+.board-modal .modal-card { gap: 12px; overflow: hidden; }
+.board-modal .dboard { --dcol: 96px; max-height: calc(100dvh - 190px); overflow: auto; padding-right: 4px; }
+.board-modal .dhead { background: var(--bg); z-index: 1; padding-top: 4px; }
+@media (min-width: 900px) { .board-inline { display: none; } }
+@media (max-width: 899px) { .board-open { display: none; } }
