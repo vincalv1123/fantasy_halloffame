@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202611022345';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons, checkOwner, saveOwner } from './data.js?v=202611022345';
-import { buildModel, optimalPoints } from './model.js?v=202611022345';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202611022345';
+import { CONFIG } from './config.js?v=202611030005';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons, checkOwner, saveOwner } from './data.js?v=202611030005';
+import { buildModel, optimalPoints } from './model.js?v=202611030005';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202611030005';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -1427,6 +1427,15 @@ function viewDynDrafts(sel) {
     out.push(section(`<p class="lead">A supplemental draft fills out rosters with veterans and leftover players, so it isn't graded or counted in anyone's draft record. Each player's value since is shown for reference.</p>`));
   }
 
+  {
+    const dr = (C.S.drafts || []).find(d => d.draftId === C.draftId);
+    out.push(draftBoard({ picks: C.picks, n: C.teams, dr, team: r => name(C.S.ownerOf[r]),
+      grade: p => (C.graded && p.z != null ? gradeOf(p.z) : null),
+      attrs: p => (C.teams_ ? ` data-dyn-team="${dynKey(C)}:${p.roster_id}"` : ''),
+      under: p => (p.bestFinish ? 'best ' + esc(p.pos || '') + p.bestFinish : ''),
+      note: C.graded ? 'Tinted by grade · tap a pick for that team’s draft' : 'Supplemental drafts aren’t graded',
+      legend: C.graded ? 'Grades firm up as seasons are played. ' : '' }));
+  }
   const rounds = [...new Set(C.picks.map(p => p.round))].sort((x, y) => x - y);
   out.push(section(`<h2>Round by round</h2>${rounds.map(rd => { const ps = C.picks.filter(p => p.round === rd).sort((x, y) => x.pick_no - y.pick_no);
     return `<details class="calc round"${rd === 1 ? ' open' : ''}><summary>Round ${rd}</summary><div class="calc-body" style="padding-top:4px"><div class="scroll"><table class="table"><thead><tr><th>Pick</th><th style="text-align:left">Player</th><th style="text-align:left">Team</th>${yearHeads(C)}<th>Total</th>${C.graded ? '<th>Expected</th><th>vs. slot</th><th>Grade</th>' : ''}<th>Hit</th></tr></thead><tbody>
@@ -1625,6 +1634,15 @@ function viewDrafts(seasonSel) {
   if (!showGrades) out.push(section(`<h2>Team drafts</h2><div class="chips">${teams.slice().sort((a, b) => M.nameOf(S.ownerOf[a.r]).localeCompare(M.nameOf(S.ownerOf[b.r]))).map(t =>
     `<button type="button" class="chip ex" data-draft-team="${S.season}:${t.r}">${nm(t.r)}</button>`).join('')}</div><span class="note">Tap a team to see its whole draft.</span>`));
 
+  {
+    const all = S.picks.map(p => p.value); const mu = mean0(all);
+    const sdv = Math.sqrt(all.reduce((a, b) => a + (b - mu) * (b - mu), 0) / Math.max(1, all.length - 1)) || 1;
+    const dr = (S.drafts || []).find(d => (d.picks || []).some(q => S.picks[0] && q.player_id === S.picks[0].player_id && q.pick_no === S.picks[0].pick_no));
+    out.push(draftBoard({ picks: S.picks, n, dr, team: r => nm(r),
+      grade: p => (showGrades ? gradeOf((p.value - mu) / sdv) : null),
+      attrs: p => ` data-draft-team="${S.season}:${p.roster_id}"`,
+      under: p => (S.posRank[p.player_id] ? 'finished ' + esc(p.pos) + S.posRank[p.player_id] : '') }));
+  }
   const rounds = [...new Set(S.picks.map(p => p.round))].sort((a, b) => a - b);
   out.push(section(`<h2>Round by round</h2>${rounds.map(rd => {
     const picks = S.picks.filter(p => p.round === rd).sort((a, b) => a.pick_no - b.pick_no);
@@ -2038,6 +2056,38 @@ function viewRecap(seasonSel, weekSel) {
       <span class="note">Power rankings order teams by total points so far.</span>`));
   }
   return out.join('');
+}
+
+const mean0 = xs => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
+// ---------- Draft board ----------
+// The whole draft as a grid: teams across in draft order, rounds down. Each pick is tinted by its grade; a traded pick
+// names the team that made it. Tapping a player opens his page; tapping elsewhere opens that team's draft.
+function draftBoard(o) {
+  const { picks, n, dr, grade, attrs, under } = o;
+  if (!picks.length || !n) return '';
+  const snake = !dr || dr.type !== 'linear';
+  const slotOf = p => (p.draft_slot != null ? Number(p.draft_slot) : (() => { const i = (p.pick_no - 1) % n; return snake && p.round % 2 === 0 ? n - i : i + 1; })());
+  const map = (dr && dr.slotToRoster) || {};
+  const r1 = {}; picks.forEach(p => { if (p.round === 1) r1[slotOf(p)] = p.roster_id; });
+  const colTeam = k => (map[k] != null ? Number(map[k]) : r1[k]);
+  const rounds = [...new Set(picks.map(p => p.round))].sort((a, b) => a - b);
+  const at = {}; picks.forEach(p => { at[p.round + ':' + slotOf(p)] = p; });
+  const cols = Array.from({ length: n }, (_, i) => i + 1);
+  const head = `<div class="dhead"></div>${cols.map(k => `<div class="dhead">${colTeam(k) != null ? o.team(colTeam(k)) : 'Slot ' + k}</div>`).join('')}`;
+  const cells = rounds.map(rd => `<div class="dround">R${rd}</div>${cols.map(k => {
+    const p = at[rd + ':' + k];
+    if (!p) return '<div class="dcell empty"></div>';
+    const g = grade(p);
+    const traded = colTeam(k) != null && p.roster_id !== colTeam(k);
+    const a = attrs(p);
+    return `<div class="dcell${g ? ' g-' + g : ''}"${a ? a + ' role="button" tabindex="0"' : ''}>
+      <span class="dtop"><span>${rd}.${String(((p.pick_no - 1) % n) + 1).padStart(2, '0')}</span>${g ? `<b>${g}</b>` : ''}</span>
+      <span class="dname">${player(p.player_id)}</span>
+      <span class="dsub">${esc(p.pos || M.playerPos(p.player_id) || '')}${under(p) ? ' · ' + under(p) : ''}</span>
+      ${traded ? `<span class="dsub dvia">→ ${o.team(p.roster_id)}</span>` : ''}</div>`; }).join('')}`).join('');
+  return section(`<details class="calc board-dd" open><summary><h2>Draft board</h2><span class="note">${o.note || 'Tinted by grade · tap a pick for that team’s draft'}</span></summary>
+    <div class="calc-body"><div class="dboard" style="grid-template-columns:40px repeat(${n}, minmax(108px, 1fr))">${head}${cells}</div>
+    <span class="note">${o.legend || ''}A = a standout pick for its slot, C = about what the slot usually gives, F = far below. → = a traded pick, made by that team.</span></div></details>`);
 }
 
 // ---------- Stat search ----------

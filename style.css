@@ -428,3 +428,22 @@ button.tile.tbtn:hover, button.tile.tbtn:focus-visible { background: var(--panel
 /* Weekly recap highlight cards. */
 .recap-cards { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
 .recap-cards .card:hover { outline: 1px solid var(--line-strong); }
+
+/* Draft board: rounds down, teams across, picks tinted by grade. */
+.dboard { display: grid; gap: 4px; overflow-x: auto; padding-bottom: 6px; }
+.dhead { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; padding: 2px 4px 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; position: sticky; top: 0; }
+.dround { font-family: var(--mono); font-size: 12px; color: var(--muted); display: flex; align-items: center; }
+.dcell { border-radius: 8px; padding: 6px 7px; background: var(--panel); border-left: 3px solid var(--line-strong); display: flex; flex-direction: column; gap: 2px; min-width: 0; cursor: default; }
+.dcell[role="button"] { cursor: pointer; }
+.dcell[role="button"]:hover { outline: 1px solid var(--line-strong); }
+.dcell.empty { background: transparent; border-left-color: transparent; }
+.dcell .dtop { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 10px; color: var(--muted); }
+.dcell .dtop b { font-weight: 700; }
+.dcell .dname { font-size: 12.5px; font-weight: 600; line-height: 1.2; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.dcell .dsub { font-size: 10.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dcell .dvia { color: #C9D3D2; }
+.dcell.g-A { border-left-color: #5FC79B; background: rgba(95, 199, 155, .16); } .dcell.g-A .dtop b { color: #5FC79B; }
+.dcell.g-B { border-left-color: #9FD8B8; background: rgba(159, 216, 184, .09); } .dcell.g-B .dtop b { color: #9FD8B8; }
+.dcell.g-C { border-left-color: #6E7F82; } .dcell.g-C .dtop b { color: #C9D3D2; }
+.dcell.g-D { border-left-color: #F2B59E; background: rgba(242, 181, 158, .09); } .dcell.g-D .dtop b { color: #F2B59E; }
+.dcell.g-F { border-left-color: #F0907A; background: rgba(240, 144, 122, .16); } .dcell.g-F .dtop b { color: #F0907A; }
