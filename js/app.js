@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202611030030';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons, checkOwner, saveOwner } from './data.js?v=202611030030';
-import { buildModel, optimalPoints } from './model.js?v=202611030030';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202611030030';
+import { CONFIG } from './config.js?v=202611102345';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons, checkOwner, saveOwner } from './data.js?v=202611102345';
+import { buildModel, optimalPoints } from './model.js?v=202611102345';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202611102345';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -992,8 +992,11 @@ function managerMoves(id) {
   const allSides = [].concat.apply([], list.map(sides));
   const gc = {}; allSides.forEach(sd => { if (sd.grade) gc[sd.grade] = (gc[sd.grade] || 0) + 1; });
   const gradeLine = ['A', 'B', 'C', 'D', 'F'].filter(g => gc[g]).map(g => `<span class="grade sm" style="background:${GRADE_COLORS[g]}">${g}</span>${gc[g] > 1 ? '<span class="note">×' + gc[g] + '</span>' : ''}`).join(' ');
-  const trades = panel('Trades', big(signed(tNet), sign(tNet), `${tCount} trade${tCount === 1 ? '' : 's'}${gradeLine ? '<span style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;align-items:center">' + gradeLine + '</span>' : ''}`),
-    list.map(x => { const ss = sides(x); return row(x, signed(x.trades.net), sign(x.trades.net), ss.length ? `${ss.length} trade${ss.length === 1 ? '' : 's'} · <span class="num" style="letter-spacing:1px;font-weight:600">${ss.map(sd => sd.grade ? `<span style="color:${GRADE_COLORS[sd.grade]}">${sd.grade}</span>` : '').join('')}</span>` : 'No trades'); }).join(''),
+  // Tapping the career total lists every trade; tapping a season lists that season's.
+  const tradeRow = (x, v, cls, sub) => `<button type="button" class="row rowbtn" data-trade-list="${esc(id)}@${x.S.season}" style="grid-template-columns:44px minmax(0,1fr) auto;text-align:left;width:100%">
+    <span class="year">${x.S.season}</span><span class="sub" style="min-width:0">${sub}${so(x)}</span><span class="num ${cls}" style="font-size:14px">${v}</span></button>`;
+  const trades = panel('Trades', (tCount ? `<button type="button" class="career-btn" data-trade-list="${esc(id)}">` : '<div>') + big(signed(tNet), sign(tNet), `${tCount} trade${tCount === 1 ? '' : 's'}${gradeLine ? '<span style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;align-items:center">' + gradeLine + '</span>' : ''}${tCount ? '<span class="note" style="margin-top:6px;color:var(--fg-2)">Tap to see every trade →</span>' : ''}`) + (tCount ? '</button>' : '</div>'),
+    list.map(x => { const ss = sides(x); return (ss.length ? tradeRow : row)(x, signed(x.trades.net), sign(x.trades.net), ss.length ? `${ss.length} trade${ss.length === 1 ? '' : 's'} · <span class="num" style="letter-spacing:1px;font-weight:600">${ss.map(sd => sd.grade ? `<span style="color:${GRADE_COLORS[sd.grade]}">${sd.grade}</span>` : '').join('')}</span>` : 'No trades'); }).join(''),
     dyn ? 'Value got minus value given over four seasons.' : 'Value got minus value given, rest of the season.');
   // Draft (redraft only).
   let draft = '';
@@ -2116,6 +2119,45 @@ function draftBoard(o) {
     <details class="calc board-dd board-inline" open><summary><h2>Draft board</h2><span class="note">${note}</span></summary>
     <div class="calc-body">${grid}${legend}</div></details>`);
 }
+
+// A manager's trades (all, or one season) in a pop-up; each opens the full trade on top.
+function openTradeList(key) {
+  const [id, season] = key.split('@');
+  const items = [];
+  M.seasons.forEach(S => {
+    if (season && S.season !== season) return;
+    S.trades.forEach(t => { const sd = t.sides.find(x => S.ownerOf[x.rid] === id); if (sd) items.push({ S, t, sd }); });
+  });
+  items.sort((a, b) => (b.t.created || 0) - (a.t.created || 0));
+  const tot = items.reduce((t, x) => t + x.sd.net, 0);
+  let dlg = document.getElementById('tlist-modal');
+  if (!dlg) {
+    dlg = document.createElement('dialog');
+    dlg.id = 'tlist-modal'; dlg.className = 'modal trade';
+    dlg.setAttribute('aria-labelledby', 'tlist-title');
+    document.body.appendChild(dlg);
+    dlg.addEventListener('click', e => { if (e.target === dlg || e.target.closest('[data-close]')) dlg.close(); });
+  }
+  const gr = g => (g ? `<span class="grade sm" style="background:${GRADE_COLORS[g]};margin-right:8px">${g}</span>` : '');
+  dlg.innerHTML = `<div class="modal-card">
+    <div class="line2" style="align-items:center"><h2 id="tlist-title" style="font-size:18px">${name(id)}’s trades${season ? ' · ' + season : ''}</h2>
+      <button type="button" class="close" data-close aria-label="Close">✕</button></div>
+    <div class="line2"><span class="note">${items.length} trade${items.length === 1 ? '' : 's'}</span><span class="num ${sign(tot)}" style="font-size:16px">${signed(tot)} net</span></div>
+    <div style="display:flex;flex-direction:column;gap:8px">${items.map(({ S, t, sd }) => {
+      const others = t.sides.filter(x => x !== sd).map(x => name(S.ownerOf[x.rid])).join(' & ');
+      // A pick shows its exact slot once that draft has happened (1.07), otherwise its round.
+      const pk = d => (d.slotLabel ? d.season + ' ' + d.slotLabel : d.pickNo ? d.season + ' ' + d.round + '.' + String(((d.pickNo - 1) % S.rids.length) + 1).padStart(2, '0') : d.season + ' R' + d.round);
+      const gave = sd.sent.map(g => player(g.pid)).concat(t.picks.filter(d => d.from === sd.rid).map(pk));
+      const got = sd.got.map(g => player(g.pid)).concat(t.picks.filter(d => d.to === sd.rid).map(pk));
+      return `<button type="button" class="box tradebtn"${tradeAttr(t)}><div class="top-line"><span>${S.season} · ${tradeWhen(t)} · with ${others}</span><span>Tap for details</span></div>
+        <div class="line2"><span style="font-size:14px;min-width:0"><span style="color:#8A9C9F">Got</span> ${got.join(', ') || '—'}<br><span style="color:#8A9C9F">Gave</span> ${gave.join(', ') || '—'}</span>
+        <span style="display:flex;align-items:center;white-space:nowrap">${gr(sd.grade)}<span class="num ${sign(sd.net)}" style="font-size:14px">${signed(sd.net)}</span></span></div></button>`; }).join('') || '<p class="lead">No trades.</p>'}</div>
+    <p class="note" style="margin:0">${LG.format === 'dynasty' ? 'Value got minus value given over four seasons.' : 'Value got minus value given, rest of the season.'} Tap a trade for both sides.</p>
+  </div>`;
+  if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
+  const c = dlg.querySelector('.close'); if (c) c.focus();
+}
+document.addEventListener('click', e => { const b = e.target.closest('[data-trade-list]'); if (b) { e.preventDefault(); openTradeList(b.dataset.tradeList); } });
 
 // ---------- Stat search ----------
 let lastQuery = '';

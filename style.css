@@ -455,3 +455,8 @@ button.tile.tbtn:hover, button.tile.tbtn:focus-visible { background: var(--panel
 .board-modal .dhead { background: var(--bg); z-index: 1; padding-top: 4px; }
 @media (min-width: 900px) { .board-inline { display: none; } }
 @media (max-width: 899px) { .board-open { display: none; } }
+
+/* Profile: the career trades total opens the manager's trade list. */
+.career-btn { all: unset; display: flex; flex-direction: column; gap: 2px; cursor: pointer; border-radius: 10px; margin: -6px; padding: 6px; }
+.career-btn:hover { background: var(--panel-2); }
+.career-btn:focus-visible { outline: 2px solid var(--line-strong); }
