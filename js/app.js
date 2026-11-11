@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202611102345';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons, checkOwner, saveOwner } from './data.js?v=202611102345';
-import { buildModel, optimalPoints } from './model.js?v=202611102345';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202611102345';
+import { CONFIG } from './config.js?v=202611102355';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons, checkOwner, saveOwner } from './data.js?v=202611102355';
+import { buildModel, optimalPoints } from './model.js?v=202611102355';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202611102355';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -344,7 +344,7 @@ function viewAll() {
       return rrow(n, key ? `data-matchup="${key}"` : '', name(x.S.ownerOf[x.b.rid]), `${x.S.season} · Week ${x.b.week} · left on the bench${blunderNote(x.b)}`, f1(x.b.gap) + ' pts', 'down'); });
 
   // Career: waivers, trades and draft value. One card each with the best and worst; it drops down to every manager.
-  if (done2.length) {
+  if (M.seasons.length) {
     const a = allTimeTotals();
     const career = (title, k, ok, fmt, detail) => {
       const list = a.list.filter(ok || (() => true)).sort((p, q) => q[k] - p[k]);
@@ -361,7 +361,7 @@ function viewAll() {
     career('Draft value vs. slot, career', 'draft', x => x.drafts > 0, v => signed(v, 0), x => x.picks + ' picks in ' + x.drafts + ' draft' + (x.drafts === 1 ? '' : 's'));
   }
   if (cards.length) out.push(section(`<div class="head"><h2>All-time bests &amp; worsts</h2><span class="note">Finished seasons</span></div><div style="display:flex;flex-direction:column;gap:10px">${cards.join('')}</div>
-    <span class="note">Waiver pickups count points above a replacement-level starter at their position for every start.</span>`));
+    <span class="note">Single plays come from finished seasons. Career totals include ${M.seasons[0] && M.seasons[0].isCurrent ? M.seasons[0].season + ' so far' : 'every season'}, matching each manager\u2019s profile. Waiver pickups count points above a replacement-level starter at their position for every start.</span>`));
 
   // Schedule swap
   const swaps = lb.map(c => ({ c, s: M.swapCareer[c.id] })).filter(x => x.s && (x.s.actualW + x.s.actualL) > 0)
@@ -1766,11 +1766,11 @@ function awardDesc(key) {
   })[key] || '';
 }
 
-// All-time career totals behind the all-time awards (finished seasons, redraft only): waiver points above
-// replacement, trade +/- and draft value vs. slot, with the best and worst manager for each.
+// Career totals behind the All-Time career cards: waiver points above replacement, trade +/- and draft value vs. slot,
+// every season including the current one so far, so they match the totals on each manager's profile.
 function allTimeTotals() {
   const t = {};
-  completed().forEach(S => S.rids.forEach(r => {
+  M.seasons.forEach(S => S.rids.forEach(r => {
     const id = S.ownerOf[r];
     const x = t[id] = t[id] || { id, waiver: 0, adds: 0, trade: 0, trades: 0, draft: 0, drafts: 0, picks: 0 };
     x.waiver += S.waivers[r].pts; x.adds += S.waivers[r].adds;
@@ -1781,8 +1781,7 @@ function allTimeTotals() {
   }));
   // Dynasty: value vs. slot from every graded draft (rookie drafts and the startup) held in a finished season.
   if (LG.format === 'dynasty' && M.dynDrafts) {
-    const done = new Set(completed().map(S => S.season));
-    M.dynDrafts.filter(C => C.graded && done.has(C.season)).forEach(C => {
+    M.dynDrafts.filter(C => C.graded).forEach(C => {
       const seen = new Set();
       C.picks.forEach(p => {
         const x = t[p.owner] = t[p.owner] || { id: p.owner, waiver: 0, adds: 0, trade: 0, trades: 0, draft: 0, drafts: 0, picks: 0 };
