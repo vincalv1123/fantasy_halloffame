@@ -1,7 +1,7 @@
 // Turns raw Sleeper data into every stat, award and score the site shows.
 // Pure functions only: nothing here touches the page or the network.
 
-import { CONFIG } from './config.js?v=202611171715';
+import { CONFIG } from './config.js?v=202611171730';
 
 const ELIGIBLE = {
   QB: ['QB'], RB: ['RB'], WR: ['WR'], TE: ['TE'], K: ['K'], DEF: ['DEF'],
@@ -495,7 +495,7 @@ function buildSeason(raw, players, isNewest, later, format, opts) {
   const hasDraft = picks.length > 0 && format !== 'dynasty';
   const sc = { results: scale(results), startSit: scale(startSit), waivers: scale(waiv), trades: scale(trade), draft: scale(draft) };
   S.tradeScored = valueMode;
-  const W = CONFIG.weights;
+  const W = (format === 'dynasty' && CONFIG.dynastyWeights) || CONFIG.weights;
   const wsum = W.results + W.startSit + W.waivers + W.trades + (hasDraft ? W.draft : 0);
   // League average and spread for each raw stat, kept so profiles can show the math.
   const rawSets = { results, startSit, waivers: waiv, trades: trade, draft };
@@ -964,7 +964,7 @@ export function buildModel(data, format) {
   const dynDrafts = format === 'dynasty' ? dynastyDrafts(seasons) : [];
   const scout = scoutGrades(dynDrafts);
   if (format === 'dynasty' && Object.keys(scout).length) {
-    const W = CONFIG.weights;
+    const W = CONFIG.dynastyWeights || CONFIG.weights;
     seasons.forEach(S => {
       S.hasDraft = true; S.draftIsScout = true;
       S.weightSum = W.results + W.startSit + W.waivers + W.trades + W.draft;

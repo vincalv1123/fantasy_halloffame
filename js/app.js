@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202611171715';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons, checkOwner, saveOwner } from './data.js?v=202611171715';
-import { buildModel, optimalPoints } from './model.js?v=202611171715';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202611171715';
+import { CONFIG } from './config.js?v=202611171730';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons, checkOwner, saveOwner } from './data.js?v=202611171730';
+import { buildModel, optimalPoints } from './model.js?v=202611171730';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202611171730';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -249,7 +249,7 @@ function viewAll() {
       <div class="rows">${sc.map((x, i) => `<a class="row r-score" href="${mlink(x.id)}"><span class="num" style="font-size:13px;color:${i === 0 ? GOLD : '#8A9C9F'}">${i + 1}</span>
         <span class="stack" style="gap:7px"><span class="name">${name(x.id)}</span><span class="bar"><i style="width:${x.score}%;background:${i === 0 ? GOLD : '#7E9093'}"></i></span></span>
         <span class="val">${Math.round(x.score)}</span></a>`).join('')}</div>
-      <span class="note">From every rookie draft: value per pick vs. slot (60%), hit rate (25%) and elite rate (15%), with young picks counting less. Separate from the Manager Score, which leaves the draft out in dynasty. <a href="${PX}drafts">Rookie drafts →</a></span>`));
+      <span class="note">From every rookie draft: value per pick vs. slot (60%), hit rate (25%) and elite rate (15%), with young picks counting less. It’s also the draft part of the Manager Score in dynasty (20%). <a href="${PX}drafts">Rookie drafts →</a></span>`));
   }
 
   if (M.records.length) {
@@ -753,7 +753,7 @@ function tiles(list) {
 const fmtRaw = (k, v) => k === 'results' ? pct3(v) : k === 'startSit' ? (v * 100).toFixed(1) + '%' : k === 'waivers' ? signed(v) + ' pts' : signed(v) + ' pts';
 
 function seasonCalc(x) {
-  const S = x.S; const sc = x.score; const W = CONFIG.weights;
+  const S = x.S; const sc = x.score; const W = scoreWeights();
   const keys = ['results', 'startSit', 'waivers', 'trades'].concat(S.hasDraft ? ['draft'] : []);
   const rows = keys.map(k => {
     const stat = S.scoreStats[k];
@@ -789,7 +789,7 @@ function careerCalc(id, list) {
 
 // Manager Score dropdowns: each part's 0–100 score, its weight and the stat behind it.
 function seasonPartRows(S, r) {
-  const sc = S.scores[r]; const W = CONFIG.weights;
+  const sc = S.scores[r]; const W = scoreWeights();
   const keys = ['results', 'startSit', 'waivers', 'trades'].concat(S.hasDraft ? ['draft'] : []);
   const st = S.st[r]; const eff = S.efficiency[r];
   const detail = {
@@ -802,7 +802,7 @@ function seasonPartRows(S, r) {
   return keys.map(k => ({ k, w: W[k] / S.weightSum, v: sc.parts[k], d: detail[k] }));
 }
 function careerPartRows(c) {
-  const W = CONFIG.weights;
+  const W = scoreWeights();
   const keys = ['results', 'startSit', 'waivers', 'trades'].concat(c.parts.draft != null ? ['draft'] : []);
   const wsum = keys.reduce((t, k) => t + W[k], 0);
   const detail = {
@@ -873,7 +873,7 @@ function viewManager(id, seasonSel) {
   const sel = seasonSel ? list.find(x => x.S.season === seasonSel) : null;
   const completedPlayed = list.filter(x => !x.S.isCurrent).length;
   const tag = rank === 1 ? '<span class="tag gold">Best manager</span>' : rank === lb.length && lb.length > 1 ? '<span class="tag down">Worst manager</span>' : '';
-  const W = CONFIG.weights;
+  const W = scoreWeights();
   const out = [];
   out.push(section(`<div class="eyebrow">${tag}<span>#${rank} of ${lb.length} · ${list.length} season${list.length > 1 ? 's' : ''}</span></div>
     <div class="line2" style="align-items:flex-end;gap:16px"><h1 style="min-width:0;overflow-wrap:anywhere">${name(id)}</h1>
@@ -1536,7 +1536,7 @@ function openDynInfo() {
     <h3>5. How sure is the grade?</h3>
     <p><b>Early</b> (year 1), <b>Settling</b> (year 2), <b>Final</b> (year 3 on). Grades keep moving as players develop, so a slow-starting rookie can climb from a D to an A.</p>
     <h3>Scout grade and Scout of the Year</h3>
-    <p>The <b>Scout grade</b> (0–100) rates each manager's rookie drafting: value per pick vs. slot 60%, hit rate 25%, elite rate 15%, each scaled so 50 is the league average. Picks count 40% in year 1, 70% in year 2 and fully after that, and managers with few picks are pulled toward 50. It keeps updating as classes develop. It's separate from the Manager Score, which leaves the draft out in dynasty.</p>
+    <p>The <b>Scout grade</b> (0–100) rates each manager's rookie drafting: value per pick vs. slot 60%, hit rate 25%, elite rate 15%, each scaled so 50 is the league average. Picks count 40% in year 1, 70% in year 2 and fully after that, and managers with few picks are pulled toward 50. It keeps updating as classes develop. It's separate from the Manager Score, where it’s the draft part (20%) in dynasty.</p>
     <p><b>Scout of the Year</b> (replaces Steal of the Draft in dynasty) goes to the manager whose rookie picks in their first three seasons produced the most that season: points above replacement, elite seasons multiplied. It only uses that season's results, so once a season ends its winner never changes.</p>
     <h3>Traded players</h3>
     <p>A pick's grade follows the <b>player</b>, wherever he ends up: if you trade a rookie and he breaks out elsewhere, your pick still grades well, because you picked the right player. Selling him early shows up in that <b>trade's</b> grade instead, so it isn't counted twice. A <b>Traded</b> tag marks those players (tap it for the trade), and <b>Kept value</b> in a team's pop-up shows what the drafter actually got, on the same scale: his value while they had him plus their share of what came back, valued the way the trade is graded.</p>
@@ -2157,6 +2157,9 @@ function openTradeList(key) {
   const c = dlg.querySelector('.close'); if (c) c.focus();
 }
 document.addEventListener('click', e => { const b = e.target.closest('[data-trade-list]'); if (b) { e.preventDefault(); openTradeList(b.dataset.tradeList); } });
+
+// Manager Score weights for this league (dynasty leagues have their own).
+function scoreWeights() { return (LG && LG.format === 'dynasty' && CONFIG.dynastyWeights) || CONFIG.weights; }
 
 // ---------- Stat search ----------
 let lastQuery = '';

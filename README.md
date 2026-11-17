@@ -27,7 +27,7 @@ Each part is scored against the rest of the league that season (50 = average), t
 
 The career score averages every season, weighted by games played.
 
-In dynasty leagues the draft part of the score is each manager's scout grade (their rookie drafts, career-long), keep counting traded players in later seasons while they stay on that team, and leave taxi-squad players out of the best-possible lineup.
+In dynasty leagues the weights are results 30%, start/sit 20%, waivers 10%, trades 20% and draft 20%, and the draft part is each manager's scout grade (their rookie drafts, career-long), keep counting traded players in later seasons while they stay on that team, and leave taxi-squad players out of the best-possible lineup.
 
 ## Files
 

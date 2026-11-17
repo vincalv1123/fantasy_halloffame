@@ -6,6 +6,9 @@ export const CONFIG = {
   // Manager Score weights (must add up to 1). In dynasty leagues the draft part is each manager's scout grade.
   weights: { results: 0.35, startSit: 0.20, waivers: 0.15, trades: 0.20, draft: 0.10 },
 
+  // Dynasty leagues weigh the draft (the scout grade) more, and results and waivers less.
+  dynastyWeights: { results: 0.30, startSit: 0.20, waivers: 0.10, trades: 0.20, draft: 0.20 },
+
   // Redraft draft grades: share of each pick's expected value that comes from hindsight
   // (the Nth-best player's value that season for the Nth pick). The rest comes from what
   // that slot has produced across the league's drafts. 0 = slot history only.
