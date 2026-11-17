@@ -27,7 +27,7 @@ Each part is scored against the rest of the league that season (50 = average), t
 
 The career score averages every season, weighted by games played.
 
-Dynasty leagues leave the draft out of the score (the other parts are reweighted), keep counting traded players in later seasons while they stay on that team, and leave taxi-squad players out of the best-possible lineup.
+In dynasty leagues the draft part of the score is each manager's scout grade (their rookie drafts, career-long), keep counting traded players in later seasons while they stay on that team, and leave taxi-squad players out of the best-possible lineup.
 
 ## Files
 

@@ -3,7 +3,7 @@
 export const CONFIG = {
   appName: 'Sleeper Hall of Fame',
 
-  // Manager Score weights (must add up to 1). Dynasty leagues leave out the draft part.
+  // Manager Score weights (must add up to 1). In dynasty leagues the draft part is each manager's scout grade.
   weights: { results: 0.35, startSit: 0.20, waivers: 0.15, trades: 0.20, draft: 0.10 },
 
   // Redraft draft grades: share of each pick's expected value that comes from hindsight

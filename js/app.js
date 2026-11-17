@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202611102355';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons, checkOwner, saveOwner } from './data.js?v=202611102355';
-import { buildModel, optimalPoints } from './model.js?v=202611102355';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202611102355';
+import { CONFIG } from './config.js?v=202611171715';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons, checkOwner, saveOwner } from './data.js?v=202611171715';
+import { buildModel, optimalPoints } from './model.js?v=202611171715';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202611171715';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -767,7 +767,7 @@ function seasonCalc(x) {
     <div class="scroll"><table class="table"><thead><tr><th>Part</th><th>Raw stat</th><th>League avg</th><th>Spread</th><th>Scaled</th><th>Weight</th><th>Adds</th></tr></thead>
     <tbody>${rows}<tr><td class="t" style="font-weight:600">Total</td><td></td><td></td><td></td><td></td><td></td><td style="font-weight:600;color:#F1F4F3">${f1(sc.total)}</td></tr></tbody></table></div>
     <ol class="steps">
-      <li><b>Raw stats.</b> Results = ½ × win % (${pct3(x.st.winPct)}) + ½ × all-play (${pct3(x.st.allPlayPct)}) = ${pct3(sc.raw.results)}. Start/sit = points started ÷ best possible lineup (${comma(x.eff.actual)} ÷ ${comma(x.eff.optimal)}). Waivers = points above a replacement-level starter at each pickup's position, for every start. ${S.tradeScored && S.format === 'dynasty' ? 'Trades = value got minus given over four seasons: each traded player\u2019s value in the trade season and the next three (points above replacement with elite seasons multiplied, later seasons counting less), and each traded rookie pick at its slot\u2019s fixed value.' : S.tradeScored ? 'Trades = value over replacement got minus given: each traded player\u2019s rest-of-season points above a replacement-level starter at his position (never below 0), and each traded pick at its slot\u2019s expected value.' : 'Trades = starter points gained minus given up.'}${S.hasDraft ? ' Draft = each pick’s points above a replacement-level starter at his position, minus what the slot was expected to give (70% what picks near it were worth across this league’s drafts, 30% the value of the player who finished that many spots down the board).' : ''}</li>
+      <li><b>Raw stats.</b> Results = ½ × win % (${pct3(x.st.winPct)}) + ½ × all-play (${pct3(x.st.allPlayPct)}) = ${pct3(sc.raw.results)}. Start/sit = points started ÷ best possible lineup (${comma(x.eff.actual)} ÷ ${comma(x.eff.optimal)}). Waivers = points above a replacement-level starter at each pickup's position, for every start. ${S.tradeScored && S.format === 'dynasty' ? 'Trades = value got minus given over four seasons: each traded player\u2019s value in the trade season and the next three (points above replacement with elite seasons multiplied, later seasons counting less), and each traded rookie pick at its slot\u2019s fixed value.' : S.tradeScored ? 'Trades = value over replacement got minus given: each traded player\u2019s rest-of-season points above a replacement-level starter at his position (never below 0), and each traded pick at its slot\u2019s expected value.' : 'Trades = starter points gained minus given up.'}${S.draftIsScout ? ' Draft = the manager\u2019s scout grade (their rookie drafts, career-long: value vs. slot, hit rate and elite hits; 50 before they have a graded pick), already on the 0\u2013100 scale.' : S.hasDraft ? ' Draft = each pick’s points above a replacement-level starter at his position, minus what the slot was expected to give (70% what picks near it were worth across this league’s drafts, 30% the value of the player who finished that many spots down the board).' : ''}</li>
       <li><b>Scaled.</b> 50 + 20 × (raw − league avg) ÷ spread, kept between 0 and 100. Spread is the standard deviation across all ${S.rids.length} teams that season.</li>
       <li><b>Bonus.</b> ${sc.bonusParts.length ? 'Results got ' + sc.bonusParts.join(', ') + ' (capped at 100).' : 'No playoff, final or title bonus this season.'}${S.isCurrent ? ' Bonuses are added once the season ends.' : ''}</li>
       <li><b>Score.</b> Each scaled part × its weight, divided by the total weight (${Math.round(S.weightSum * 100)}%) = <b>${f1(sc.total)}</b>.</li>
@@ -810,7 +810,7 @@ function careerPartRows(c) {
     startSit: (c.effPct * 100).toFixed(1) + '% of best lineup · ' + Math.round(c.benchLeft) + ' pts left on bench',
     waivers: signed(c.waiverPts) + ' pts above replacement from pickups',
     trades: tradeLine(c.tradeNet) + ' across ' + c.trades + ' trade' + (c.trades === 1 ? '' : 's'),
-    draft: 'Average draft part across seasons with a draft'
+    draft: LG.format === 'dynasty' ? 'Scout grade: their rookie drafts, career-long' : 'Average draft part across seasons with a draft'
   };
   return keys.map(k => ({ k, w: W[k] / wsum, v: c.parts[k], d: detail[k] }));
 }
@@ -907,7 +907,7 @@ function viewManager(id, seasonSel) {
       ['Start/sit', W.startSit, sc.parts.startSit, `Started ${(x.eff.pct * 100).toFixed(1)}% of best possible points · ${Math.round(x.eff.benchLeft)} pts left on the bench`],
       ['Waivers', W.waivers, sc.parts.waivers, `${signed(x.waiv.pts)} pts above replacement from ${x.waiv.adds} pickups${x.waiv.best && x.waiv.best.pts > 0 ? ' · best: ' + player(x.waiv.best.pid) + ' (' + signed(x.waiv.best.pts) + ')' : ''}`],
       ['Trades', W.trades, sc.parts.trades, `${x.trades.count} trade${x.trades.count === 1 ? '' : 's'} · ${tradeLine(x.trades.net)}`],
-      ['Draft', W.draft, sc.parts.draft, `${x.picks} picks · ${signed(x.draftVal, 0)} positional pts vs. what picks near those slots were worth`]
+      ['Draft', W.draft, sc.parts.draft, S.draftIsScout ? `Scout grade ${Math.round(sc.parts.draft)} · their rookie drafts, career-long` : `${x.picks} picks · ${signed(x.draftVal, 0)} positional pts vs. what picks near those slots were worth`]
     ].filter(p => p[2] != null);
     out.push(section(breakdown(`How the ${S.season} ${Math.round(sc.total)} breaks down`, parts) + seasonCalc(x)));
   } else {
@@ -938,7 +938,7 @@ function viewManager(id, seasonSel) {
       ['Start/sit', W.startSit, c.parts.startSit, `Started ${(c.effPct * 100).toFixed(1)}% of best possible points · ${Math.round(c.benchLeft)} pts left on the bench`],
       ['Waivers', W.waivers, c.parts.waivers, `${signed(c.waiverPts)} pts above replacement from ${adds} pickups`],
       ['Trades', W.trades, c.parts.trades, `${c.trades} trade${c.trades === 1 ? '' : 's'} · ${tradeLine(c.tradeNet)}`],
-      ['Draft', W.draft, c.parts.draft, `${picks} picks · ${signed(draft, 0)} positional pts vs. what their draft slots usually produce`]
+      ['Draft', W.draft, c.parts.draft, LG.format === 'dynasty' ? `Scout grade ${Math.round(c.parts.draft)} · their rookie drafts, career-long` : `${picks} picks · ${signed(draft, 0)} positional pts vs. what their draft slots usually produce`]
     ].filter(p => p[2] != null);
     out.push(section(managerCareerAwards(id, list)));
     if (LG.format === 'dynasty' && M.dynDrafts && M.dynDrafts.length) { const h = managerRookieDrafts(id); if (h) out.push(section(h)); }

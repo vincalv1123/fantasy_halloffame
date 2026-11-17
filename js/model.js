@@ -1,7 +1,7 @@
 // Turns raw Sleeper data into every stat, award and score the site shows.
 // Pure functions only: nothing here touches the page or the network.
 
-import { CONFIG } from './config.js?v=202611102355';
+import { CONFIG } from './config.js?v=202611171715';
 
 const ELIGIBLE = {
   QB: ['QB'], RB: ['RB'], WR: ['WR'], TE: ['TE'], K: ['K'], DEF: ['DEF'],
@@ -491,7 +491,7 @@ function buildSeason(raw, players, isNewest, later, format, opts) {
     trade[r] = tradeNet[r].net;
     draft[r] = draftVal[r];
   });
-  // Dynasty drafts are left out of the Manager Score; the other parts are reweighted to fill the gap.
+  // Dynasty drafts are scored after every season is built: the draft part is the manager's scout grade (buildModel).
   const hasDraft = picks.length > 0 && format !== 'dynasty';
   const sc = { results: scale(results), startSit: scale(startSit), waivers: scale(waiv), trades: scale(trade), draft: scale(draft) };
   S.tradeScored = valueMode;
@@ -959,6 +959,24 @@ export function buildModel(data, format) {
   // Dynasty trades: values over several seasons need every season built first (one quick pass without odds).
   const dynTrade = (format || 'redraft') === 'dynasty' ? dynastyTradeValues(build({ skipOdds: true, curves })) : null;
   const seasons = build({ curves, pickValue, dynTrade });
+  // Dynasty: the draft part of every season's Manager Score is the manager's scout grade (their rookie drafts,
+  // career-long); a manager with no graded rookie picks yet gets a neutral 50.
+  const dynDrafts = format === 'dynasty' ? dynastyDrafts(seasons) : [];
+  const scout = scoutGrades(dynDrafts);
+  if (format === 'dynasty' && Object.keys(scout).length) {
+    const W = CONFIG.weights;
+    seasons.forEach(S => {
+      S.hasDraft = true; S.draftIsScout = true;
+      S.weightSum = W.results + W.startSit + W.waivers + W.trades + W.draft;
+      const vals = S.rids.map(r => (scout[S.ownerOf[r]] ? scout[S.ownerOf[r]].score : 50));
+      S.scoreStats.draft = { mean: mean(vals), sd: sd(vals) };
+      S.rids.forEach((r, i) => {
+        const sc = S.scores[r]; const v = vals[i];
+        sc.parts.draft = v; sc.raw.draft = v; sc.scaled.draft = v;
+        sc.total = (W.results * sc.parts.results + W.startSit * sc.parts.startSit + W.waivers * sc.parts.waivers + W.trades * sc.parts.trades + W.draft * v) / S.weightSum;
+      });
+    });
+  }
   const managers = {};
   data.seasons.forEach(raw => {
     raw.rosters.forEach(r => {
@@ -1127,10 +1145,9 @@ export function buildModel(data, format) {
     });
   });
 
-  const dynDrafts = format === 'dynasty' ? dynastyDrafts(seasons) : [];
   return {
     seasons, managers, career, leaderboard, records, h2h, h2hRecord, rivalry, allTrades, heist, swapCareer,
     nameOf, playerName, playerPos, newest,
-    dynDrafts, scout: scoutGrades(dynDrafts)
+    dynDrafts, scout
   };
 }
