@@ -1009,8 +1009,23 @@ function managerMoves(id) {
       dl.map(x => { const b = bestOf(x); return `<button type="button" class="row rowbtn" data-draft-team="${x.S.season}:${x.r}" style="grid-template-columns:44px minmax(0,1fr) auto;text-align:left;width:100%">
         <span class="year">${x.S.season}</span><span class="sub" style="min-width:0">${x.picks} picks${b ? ' · ' + player(b.player_id) : ''}${so(x)}</span><span class="num ${sign(x.draftVal)}" style="font-size:14px">${signed(x.draftVal, 0)}</span></button>`; }).join(''),
       'Positional value vs. draft slot. Tap a season for that draft.');
+  } else {
+    // Dynasty: every graded draft (rookie drafts and the startup) the manager picked in, with that team's grade.
+    const classes = (M.dynDrafts || []).map(C => ({ C, t: (C.teams_ || []).find(t => t.owner === id) })).filter(x => x.t)
+      .map(x => Object.assign(x, { best: x.t.picks.filter(p => p.pos !== 'K' && p.pos !== 'DEF').sort((a, b) => b.value - a.value)[0] }))
+      .sort((a, b) => Number(b.C.season) - Number(a.C.season) || (a.C.kind === 'startup' ? 1 : -1));
+    const dPicks = classes.reduce((t, x) => t + x.t.picks.length, 0);
+    const dBest = classes.filter(x => x.best).sort((a, b) => b.best.value - a.best.value)[0];
+    const dc = {}; classes.forEach(x => { const g = gradeOf(x.t.z); dc[g] = (dc[g] || 0) + 1; });
+    const dLine = ['A', 'B', 'C', 'D', 'F'].filter(g => dc[g]).map(g => `<span class="grade sm" style="background:${GRADE_COLORS[g]}">${g}</span>${dc[g] > 1 ? '<span class="note">×' + dc[g] + '</span>' : ''}`).join(' ');
+    const sg = M.scout && M.scout[id];
+    const early = C => (C.years <= 1 ? 'early' : C.years === 2 ? 'settling' : '');
+    draft = panel('Draft', classes.length ? `<span class="note" style="font-size:12px">Scout grade</span><span class="num" style="font-size:24px">${sg ? Math.round(sg.score) : '—'}</span><span class="note">${sg ? '' : 'No rookie picks graded yet (counts as 50) · '}${dPicks} picks in ${classes.length} draft${classes.length === 1 ? '' : 's'}${dBest ? ' · best: ' + player(dBest.best.player_id) + ' (' + dBest.C.season + ', ' + signed(dBest.best.value, 0) + ')' : ''}${dLine ? '<span style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;align-items:center">' + dLine + '</span>' : ''}</span>` : '<span class="note">No graded drafts yet</span>',
+      classes.map(x => { const g = gradeOf(x.t.z); return `<button type="button" class="row rowbtn" data-dyn-team="${dynKey(x.C)}:${x.t.r}" style="grid-template-columns:44px minmax(0,1fr) auto;text-align:left;width:100%">
+        <span class="year">${x.C.season}</span><span class="sub" style="min-width:0"><span style="color:${GRADE_COLORS[g]};font-weight:600">${g}</span>${x.C.kind === 'startup' ? ' · Startup' : ''}${x.best ? ' · ' + player(x.best.player_id) : ''}${early(x.C) ? ' <span class="note">' + early(x.C) + '</span>' : ''}</span><span class="num ${sign(x.t.value)}" style="font-size:14px">${signed(x.t.value, 0)}</span></button>`; }).join(''),
+      'Each draft is graded against the rest of that draft class (value vs. slot). The scout grade, from rookie drafts, is the draft part of the Manager Score. Tap a draft to open it.');
   }
-  return section(`<h2>Waivers, trades &amp; the draft</h2><div class="move-trio${dyn ? ' two' : ''}">${waivers}${trades}${draft}</div>`);
+  return section(`<h2>Waivers, trades &amp; the draft</h2><div class="move-trio">${waivers}${trades}${draft}</div>`);
 }
 
 const ordinal = n => n + (['th', 'st', 'nd', 'rd'][(n % 100 - 20) % 10] || ['th', 'st', 'nd', 'rd'][n % 100] || 'th');
