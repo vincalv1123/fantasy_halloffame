@@ -1967,6 +1967,7 @@ function viewPlayer(pid) {
     ['Best finish', fins[0] ? esc(pos) + fins[0].k : '—', fins[0] ? fins[0].S.season : ''],
     ['Teams', String(owners.size), [...owners].map(id => name(id)).join(', ')]
   ]) : '<p class="lead">He hasn’t been on a roster in this league.</p>'), 'hero'));
+  if (dyn && rows.length && M.dynDrafts && M.dynDrafts.yearValue) out.push(dynCareer(pid, rows));
   rows.forEach(({ S, weeks, draft, adds, trades }) => {
     const byTeam = {};
     weeks.forEach(w => { const t = byTeam[w.rid] = byTeam[w.rid] || { rid: w.rid, weeks: 0, starts: 0, pts: 0, first: w.week, last: w.week };
@@ -1999,6 +2000,42 @@ function viewPlayer(pid) {
   });
   out.push(section(`<span class="note">Points and finish = regular season while on a roster in this league (players nobody rostered aren’t tracked). Starter pts = points scored while in that team’s starting lineup, playoffs included.</span>`));
   return out.join('');
+}
+
+// Dynasty career on a player page: his value each season on the same scale as the draft grades, and the draft pick if any.
+function dynCareer(pid, rows) {
+  const D = M.dynDrafts; const pos = M.playerPos(pid);
+  const picks = [].concat.apply([], rows.map(x => x.draft)).filter(d => d.C && d.C.teams_);
+  const pk = picks.slice().sort((a, b) => Number(a.C.season) - Number(b.C.season))[0];
+  const first = pk ? Number(pk.C.season) : Math.min.apply(null, rows.map(x => Number(x.S.season)));
+  const seasons = M.seasons.filter(S => Number(S.season) >= first).slice().reverse();
+  const yrs = seasons.map(S => { const weeks = playerWeeks(S, pid); const lastW = weeks[weeks.length - 1];
+    return { S, v: D.yearValue(S, pid), mult: D.tierMult(S, pid), k: S.posRank[pid], pts: S.playerPts[pid] || 0, over: S.aboveRepl(pid), elite: D.isElite(S, pid),
+      owner: lastW ? S.ownerOf[lastW.rid] : null }; });
+  // Leave off the seasons after he left the league for good (not rostered, no value).
+  while (yrs.length > 1 && !yrs[yrs.length - 1].owner && !yrs[yrs.length - 1].v) yrs.pop();
+  const total = D.careerValue(yrs.map(y => y.v));
+  const best = yrs.slice().sort((a, b) => b.v - a.v)[0];
+  const elites = yrs.filter(y => y.elite).length;
+  let draftLine = '';
+  if (pk) { const { C, p } = pk; const g = gradeOf(p.z);
+    draftLine = `<div class="rows" style="margin-top:8px"><button type="button" class="row rowbtn" data-dyn-team="${dynKey(C)}:${p.roster_id}" style="grid-template-columns:40px minmax(0,1fr) auto;text-align:left;width:100%">
+      <span class="grade" style="background:${GRADE_COLORS[g]}">${g}</span>
+      <span class="stack"><span style="font-size:14px">Drafted ${pickLabel(C, p)} in the ${C.season} ${KIND_LABEL[C.kind].toLowerCase()} by ${name(p.owner)}</span><span class="sub">Expected ${f1(p.expected)} by now · Total ${f1(p.total)}${p.traded ? ' · kept value ' + f1(p.keptValue) + ' (traded)' : ''} · ${confidence(C)} · tap for that draft</span></span>
+      <span class="num ${sign(p.value)}" style="font-size:15px">${signed(p.value, 0)} <span class="note">vs. slot</span></span></button></div>`; }
+  return section(`<div class="head"><h2>Dynasty career</h2><span class="note">${yrs.length} season${yrs.length === 1 ? '' : 's'} in the league${pk ? ' since the draft' : ''}</span></div>
+    ${tiles([
+      ['Career value', f1(total), 'Same scale as the draft grades'],
+      ['Best season', best && best.v > 0 ? '+' + Math.round(best.v) : '—', best && best.v > 0 ? best.S.season + (best.k ? ' · ' + esc(pos) + best.k : '') : ''],
+      ['Elite seasons', String(elites), elites ? yrs.filter(y => y.elite).map(y => y.S.season).join(', ') : 'Top-tier finishes'],
+      ['Starter seasons', String(yrs.filter(y => y.over > 0).length), 'Above replacement']
+    ])}
+    <div class="scroll" style="margin-top:10px"><table class="table"><thead><tr><th>Year</th><th>Season</th><th style="text-align:left">Team</th><th>Finish</th><th>Points</th><th>Over repl.</th><th>Elite ×</th><th>Value</th></tr></thead><tbody>
+    ${yrs.map((y, i) => `<tr><td class="rk" style="width:auto">Y${i + 1}</td><td>${y.S.season}${y.S.isCurrent ? '<span class="note"> so far</span>' : ''}</td><td class="t">${y.owner ? name(y.owner) : '<span class="note">Not rostered</span>'}</td>
+      <td style="color:#C9D3D2">${y.k ? esc(pos) + y.k : '—'}</td><td style="color:#C9D3D2">${y.pts ? f1(y.pts) : '—'}</td><td class="${sign(y.over)}">${y.pts ? signed(y.over) : '—'}</td>
+      <td style="color:${y.mult > 1 ? '#E8B04B' : '#6B7B7E'}">${y.mult > 1 ? '×' + y.mult : '—'}</td><td style="color:${y.elite ? '#E8B04B' : y.v > 0 ? '#F1F4F3' : '#6B7B7E'}">${y.v > 0 ? '+' + Math.round(y.v) : '0'}${y.elite ? '★' : ''}</td></tr>`).join('')}
+    </tbody></table></div>${draftLine}
+    <span class="note">Value = points above a replacement-level starter at his position each season (never below 0), times the elite multiplier (×2 top 3, ×1.6 top 6, ×1.3 top 12; tighter for TE and 1-QB). Career value counts his best season fully, then 90%, 80%, 70% and 60% for the rest — the same Total the dynasty draft grades use.</span>`);
 }
 
 // ---------- Weekly recap ----------

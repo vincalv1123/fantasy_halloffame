@@ -916,6 +916,8 @@ export function dynastyDrafts(seasons) {
     teams.forEach(t => { t.z = tz(t.value); });
     C.teams_ = teams.sort((a, b) => b.value - a.value);
   });
+  // The same yardsticks, for player pages: one season's value and a career total.
+  classes.yearValue = (S, pid) => yearValue(S, pid); classes.tierMult = tierMult; classes.careerValue = careerValue; classes.isElite = (S, pid) => isElite(S, pid);
   return classes;
 }
 
