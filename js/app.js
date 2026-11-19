@@ -2,10 +2,10 @@
 // The league comes from the address (?league=<id>&u=<username>); without one, the start screen shows.
 // Routes: #all, #search, #drafts[@season], #awards, #s<season>, #m-<managerId>[@season], #vs-<id>~<id>.
 
-import { CONFIG } from './config.js?v=202611171730';
-import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons, checkOwner, saveOwner } from './data.js?v=202611171730';
-import { buildModel, optimalPoints } from './model.js?v=202611171730';
-import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202611171730';
+import { CONFIG } from './config.js?v=202611190417';
+import { loadAll, loadLiveWeek, loadWeekStats, lookupUser, nflState, userLeagues, leagueInfo, clearSavedSeasons, checkOwner, saveOwner } from './data.js?v=202611190417';
+import { buildModel, optimalPoints } from './model.js?v=202611190417';
+import { parse as parseQuery, answer as answerQuery, EXAMPLES, HELP, examplesFor } from './search.js?v=202611190417';
 
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -1967,7 +1967,7 @@ function viewPlayer(pid) {
     ['Best finish', fins[0] ? esc(pos) + fins[0].k : '—', fins[0] ? fins[0].S.season : ''],
     ['Teams', String(owners.size), [...owners].map(id => name(id)).join(', ')]
   ]) : '<p class="lead">He hasn’t been on a roster in this league.</p>'), 'hero'));
-  if (dyn && rows.length && M.dynDrafts && M.dynDrafts.yearValue) out.push(dynCareer(pid, rows));
+  if (dyn && rows.length && M.dynDrafts && M.dynDrafts.yearValue && M.dynDrafts.isHit) { try { out.push(dynCareer(pid, rows)); } catch (e) { console.error(e); } }
   rows.forEach(({ S, weeks, draft, adds, trades }) => {
     const byTeam = {};
     weeks.forEach(w => { const t = byTeam[w.rid] = byTeam[w.rid] || { rid: w.rid, weeks: 0, starts: 0, pts: 0, first: w.week, last: w.week };
